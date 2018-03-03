@@ -8,6 +8,7 @@ import (
 	"github.com/alxark/lonelog/structs"
 	"fmt"
 	"time"
+	"math"
 )
 
 type Syslog struct {
@@ -16,6 +17,8 @@ type Syslog struct {
 	Ip   string
 	Port int
 }
+
+const BENCHMARK_LIMIT = 10000
 
 func NewSyslog(options map[string]string, logger log.Logger) (s *Syslog, err error) {
 	s = &Syslog{}
@@ -56,14 +59,27 @@ func (s *Syslog) AcceptTo(output chan structs.Message) (err error) {
 	server.ListenUDP(fmt.Sprintf("%s:%d", s.Ip, s.Port))
 	server.Boot()
 
+	i := 0
+	benchmarkStart := time.Now().Unix()
+
 	for logItem := range channel {
+		i += 1
 		msg, err := s.reformatMessage(logItem)
 		if err != nil {
 			s.log.Printf("Failed to reformat message: " + err.Error())
 			continue
 		}
 
-		// s.log.Print(msg)
+		if i >= BENCHMARK_LIMIT {
+			benchmarkNow := time.Now().Unix()
+
+			rps := math.Floor(float64(BENCHMARK_LIMIT) / float64(benchmarkNow - benchmarkStart))
+			s.log.Printf("Processed %d, processing speed: %f RPS", BENCHMARK_LIMIT, rps)
+
+			benchmarkStart = benchmarkNow
+			i = 0
+		}
+
 		output <- msg
 	}
 

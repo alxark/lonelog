@@ -8,6 +8,7 @@ type InputPlugin struct {
 
 type FilterPlugin struct {
 	Name    string
+	Threads int
 	Plugin  string
 	Field   string
 	Options map[string]string
