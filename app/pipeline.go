@@ -8,6 +8,7 @@ import (
 	"github.com/alxark/lonelog/structs"
 	"github.com/alxark/lonelog/app/filters"
 	"errors"
+	"fmt"
 )
 
 const CHAIN_SIZE = 8192
@@ -67,7 +68,7 @@ func (p *Pipeline) setupInputs(inputsList []InputPlugin) (err error) {
 func (p *Pipeline) setupFilters(filtersList []FilterPlugin) (err error) {
 	p.log.Printf("Total filters available: %d", len(filtersList))
 
-	for _, v := range filtersList {
+	for i, v := range filtersList {
 		var filterPlugin structs.Filter
 
 		switch v.Plugin {
@@ -99,13 +100,17 @@ func (p *Pipeline) setupFilters(filtersList []FilterPlugin) (err error) {
 			filterPlugin, err = filters.NewTimeFormatFilter(v.Options, p.log)
 			break
 		default:
-			return errors.New("plugin not found: " + v.Plugin)
+			return errors.New(fmt.Sprintf("plugin #%d not found: %s", i, v.Plugin))
 		}
 
 		if err != nil {
 			return err
 		}
 
+		if v.Name == "" {
+			v.Name = fmt.Sprintf("Filter #%d", i)
+		}
+		filterPlugin.SetName(v.Name)
 		filterPlugin.SetField(v.Field)
 		p.Filters = append(p.Filters, filterPlugin)
 
@@ -153,6 +158,7 @@ func (p *Pipeline) setupOutput(outputsList []OutputPlugin) (err error) {
  */
 func (p *Pipeline) Run() (err error) {
 	var subChains []chan structs.Message
+	var subChainsNames []string
 
 	for i, input := range p.Inputs {
 		p.log.Printf("Activating input ID#%d", i)
@@ -173,6 +179,7 @@ func (p *Pipeline) Run() (err error) {
 				p.log.Printf("Creating sub-chain for #%d", i)
 				chain := make(chan structs.Message, CHAIN_SIZE)
 				subChains = append(subChains, chain)
+				subChainsNames = append(subChainsNames, p.Filters[i].GetName())
 			}
 		}
 
@@ -204,7 +211,7 @@ func (p *Pipeline) Run() (err error) {
 		time.Sleep(5 * time.Second)
 		p.log.Printf("Input queue: %d, Output queue: %d", len(p.InputStream), len(p.OutputStream))
 		for i, channel := range subChains {
-			p.log.Printf("Sub-channel #%d size is %d", i, len(channel))
+			p.log.Printf("Sub-channel %s (%d) size is %d", subChainsNames[i], i, len(channel))
 		}
 	}
 }
