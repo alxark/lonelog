@@ -1,7 +1,7 @@
 package inputs
 
 import (
-	syslog "gopkg.in/mcuadros/go-syslog.v2"
+	"gopkg.in/mcuadros/go-syslog.v2"
 	"log"
 	"strconv"
 	"errors"
@@ -13,9 +13,10 @@ import (
 
 type Syslog struct {
 	structs.Input
-	log  log.Logger
-	Ip   string
-	Port int
+	log   log.Logger
+	Ip    string
+	QueueSize int
+	Port  int
 }
 
 const BENCHMARKLIMIT = 1000000
@@ -27,6 +28,16 @@ func NewSyslog(options map[string]string, logger log.Logger) (s *Syslog, err err
 		s.Ip = "0.0.0.0"
 	} else {
 		s.Ip = options["ip"]
+	}
+
+	if queueSize, ok := options["queue"]; ok {
+		queueSizeReal, err := strconv.Atoi(queueSize)
+		if err != nil {
+			return nil, errors.New("incorrect syslog queue size: " + queueSize)
+		}
+		s.QueueSize = queueSizeReal
+	} else {
+		s.QueueSize = 8192
 	}
 
 	if _, ok := options["port"]; !ok {
@@ -48,9 +59,9 @@ func NewSyslog(options map[string]string, logger log.Logger) (s *Syslog, err err
  * Accept messages and send them to channel
  */
 func (s *Syslog) AcceptTo(output chan structs.Message) (err error) {
-	s.log.Printf("Starting syslog acceptor on %s:%d", s.Ip, s.Port)
+	s.log.Printf("Starting syslog acceptor on %s:%d, queue size: %d", s.Ip, s.Port, s.QueueSize)
 
-	channel := make(syslog.LogPartsChannel, 8192)
+	channel := make(syslog.LogPartsChannel, s.QueueSize)
 	handler := syslog.NewChannelHandler(channel)
 
 	server := syslog.NewServer()

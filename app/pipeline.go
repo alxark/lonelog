@@ -117,6 +117,9 @@ func (p *Pipeline) setupFilters(filtersList []FilterPlugin) (err error) {
 		case "time_format":
 			filterPlugin, err = filters.NewTimeFormatFilter(v.Options, p.log)
 			break
+		case "substr_contains":
+			filterPlugin, err = filters.NewSubstrContainsFilter(v.Options, p.log)
+			break
 		default:
 			return errors.New(fmt.Sprintf("plugin #%d not found: %s", i, v.Plugin))
 		}
