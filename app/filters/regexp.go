@@ -41,6 +41,7 @@ func (f *RegexpFilter) Proceed(input chan structs.Message, output chan structs.M
 		}
 
 		// f.log.Print(msg.Payload[f.Field])
+	iterateExpressions:
 		for _, expression := range f.Expressions {
 			// f.log.Printf(expression.String())
 
@@ -60,6 +61,7 @@ func (f *RegexpFilter) Proceed(input chan structs.Message, output chan structs.M
 			}
 
 			msg.Payload = payload
+			break iterateExpressions
 		}
 
 		output <- msg

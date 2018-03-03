@@ -18,7 +18,7 @@ type Syslog struct {
 	Port int
 }
 
-const BENCHMARK_LIMIT = 10000
+const BENCHMARKLIMIT = 1000000
 
 func NewSyslog(options map[string]string, logger log.Logger) (s *Syslog, err error) {
 	s = &Syslog{}
@@ -70,11 +70,11 @@ func (s *Syslog) AcceptTo(output chan structs.Message) (err error) {
 			continue
 		}
 
-		if i >= BENCHMARK_LIMIT {
+		if i >= BENCHMARKLIMIT {
 			benchmarkNow := time.Now().Unix()
 
-			rps := math.Floor(float64(BENCHMARK_LIMIT) / float64(benchmarkNow - benchmarkStart))
-			s.log.Printf("Processed %d, processing speed: %f RPS", BENCHMARK_LIMIT, rps)
+			rps := math.Floor(float64(BENCHMARKLIMIT) / float64(benchmarkNow - benchmarkStart))
+			s.log.Printf("Processed %d, processing speed: %f RPS", BENCHMARKLIMIT, rps)
 
 			benchmarkStart = benchmarkNow
 			i = 0
