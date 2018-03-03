@@ -11,6 +11,7 @@ type FilterPlugin struct {
 	Threads int
 	Plugin  string
 	Field   string
+	Queue   int
 	Options map[string]string
 }
 

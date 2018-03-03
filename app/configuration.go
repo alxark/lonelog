@@ -7,8 +7,17 @@ import (
 	"errors"
 )
 
+type InConfiguration struct {
+	Queue int
+	Input []InputPlugin
+}
+type OutConfiguration struct {
+	Queue int
+	Output []OutputPlugin
+}
 type Configuration struct {
-	Input  []InputPlugin
+	In     InConfiguration
+	Out    OutConfiguration
 	Filter []FilterPlugin
 	Output []OutputPlugin
 }

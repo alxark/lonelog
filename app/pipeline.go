@@ -20,13 +20,24 @@ type Pipeline struct {
 	Filters      []structs.Filter
 	InputStream  chan structs.Message
 	OutputStream chan structs.Message
+	// list of filter channels
+	SubChains      []chan structs.Message
+	SubChainsNames []string
 }
 
 func NewPipeline(configuration Configuration, logger log.Logger) (p Pipeline, err error) {
 	p.log = logger
 	p.log.Println("Initializing new pipeline")
 
-	err = p.setupInputs(configuration.Input)
+	inputStreamSize := 8192
+	if configuration.In.Queue > 0 {
+		inputStreamSize = configuration.In.Queue
+	}
+	p.log.Printf("Initialized input queue size: %d", inputStreamSize)
+	p.InputStream = make(chan structs.Message, inputStreamSize)
+
+
+	err = p.setupInputs(configuration.In.Input)
 	if err != nil {
 		return
 	}
@@ -36,7 +47,14 @@ func NewPipeline(configuration Configuration, logger log.Logger) (p Pipeline, er
 		return
 	}
 
-	err = p.setupOutput(configuration.Output)
+	outputStreamSize := 8192
+	if configuration.Out.Queue > 0 {
+		outputStreamSize = configuration.Out.Queue
+	}
+	p.log.Printf("Initialized output queue size: %d", outputStreamSize)
+	p.OutputStream = make(chan structs.Message, outputStreamSize)
+
+	err = p.setupOutput(configuration.Out.Output)
 	if err != nil {
 		return
 	}
@@ -114,6 +132,15 @@ func (p *Pipeline) setupFilters(filtersList []FilterPlugin) (err error) {
 		filterPlugin.SetField(v.Field)
 		p.Filters = append(p.Filters, filterPlugin)
 
+		queueSize := 8192
+		if v.Queue > 0 {
+			queueSize = v.Queue
+		}
+
+		p.log.Printf("Creating sub-chain for #%d, size: %d", i, queueSize )
+		chain := make(chan structs.Message, queueSize)
+		p.SubChains = append(p.SubChains, chain)
+		p.SubChainsNames = append(p.SubChainsNames, v.Name)
 	}
 
 	p.log.Printf("Configured %d top level filters", len(p.Filters))
@@ -157,9 +184,6 @@ func (p *Pipeline) setupOutput(outputsList []OutputPlugin) (err error) {
  * Proceed pipeline stuff
  */
 func (p *Pipeline) Run() (err error) {
-	var subChains []chan structs.Message
-	var subChainsNames []string
-
 	for i, input := range p.Inputs {
 		p.log.Printf("Activating input ID#%d", i)
 		go input.AcceptTo(p.InputStream)
@@ -172,17 +196,6 @@ func (p *Pipeline) Run() (err error) {
 	} else {
 		// we have some filters available, let's link them one by one
 
-		if len(p.Filters) > 1 {
-			subChainsNum := len(p.Filters) - 1
-
-			for i := 0; i < subChainsNum; i += 1 {
-				p.log.Printf("Creating sub-chain for #%d", i)
-				chain := make(chan structs.Message, CHAIN_SIZE)
-				subChains = append(subChains, chain)
-				subChainsNames = append(subChainsNames, p.Filters[i].GetName())
-			}
-		}
-
 		for i, filter := range p.Filters {
 			p.log.Printf("Activating filter #%d", i)
 
@@ -191,13 +204,13 @@ func (p *Pipeline) Run() (err error) {
 				go filter.Proceed(p.InputStream, p.OutputStream)
 			} else if i == 0 && len(p.Filters) > 1 {
 				p.log.Printf("First filter to chain pipeline activated")
-				go filter.Proceed(p.InputStream, subChains[i])
+				go filter.Proceed(p.InputStream, p.SubChains[i])
 			} else if i > 0 && i == len(p.Filters)-1 {
 				p.log.Printf("Last filter in chain, #%d", i)
-				go filter.Proceed(subChains[i-1], p.OutputStream)
+				go filter.Proceed(p.SubChains[i-1], p.OutputStream)
 			} else if i > 0 && i != len(p.Filters)-1 {
 				p.log.Printf("Middle filter in chain, #%d", i)
-				go filter.Proceed(subChains[i-1], subChains[i])
+				go filter.Proceed(p.SubChains[i-1], p.SubChains[i])
 			}
 		}
 	}
@@ -210,8 +223,8 @@ func (p *Pipeline) Run() (err error) {
 	for {
 		time.Sleep(5 * time.Second)
 		p.log.Printf("Input queue: %d, Output queue: %d", len(p.InputStream), len(p.OutputStream))
-		for i, channel := range subChains {
-			p.log.Printf("Sub-channel %s (%d) size is %d", subChainsNames[i], i, len(channel))
+		for i, channel := range p.SubChains {
+			p.log.Printf("Sub-channel %s (%d) size is %d", p.SubChainsNames[i], i, len(channel))
 		}
 	}
 }
