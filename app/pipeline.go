@@ -23,6 +23,7 @@ type Pipeline struct {
 	// list of filter channels
 	SubChains      []chan structs.Message
 	SubChainsNames []string
+	ThreadsCount   []int
 }
 
 func NewPipeline(configuration Configuration, logger log.Logger) (p Pipeline, err error) {
@@ -144,6 +145,11 @@ func (p *Pipeline) setupFilters(filtersList []FilterPlugin) (err error) {
 		chain := make(chan structs.Message, queueSize)
 		p.SubChains = append(p.SubChains, chain)
 		p.SubChainsNames = append(p.SubChainsNames, v.Name)
+
+		if v.Threads == 0 {
+			v.Threads = 1
+		}
+		p.ThreadsCount = append(p.ThreadsCount, v.Threads)
 	}
 
 	p.log.Printf("Configured %d top level filters", len(p.Filters))
@@ -202,18 +208,22 @@ func (p *Pipeline) Run() (err error) {
 		for i, filter := range p.Filters {
 			p.log.Printf("Activating filter #%d", i)
 
-			if i == 0 && len(p.Filters) == 1 {
-				p.log.Print("Single filter mode activated")
-				go filter.Proceed(p.InputStream, p.OutputStream)
-			} else if i == 0 && len(p.Filters) > 1 {
-				p.log.Printf("First filter to chain pipeline activated")
-				go filter.Proceed(p.InputStream, p.SubChains[i])
-			} else if i > 0 && i == len(p.Filters)-1 {
-				p.log.Printf("Last filter in chain, #%d", i)
-				go filter.Proceed(p.SubChains[i-1], p.OutputStream)
-			} else if i > 0 && i != len(p.Filters)-1 {
-				p.log.Printf("Middle filter in chain, #%d", i)
-				go filter.Proceed(p.SubChains[i-1], p.SubChains[i])
+			for thread := 0; thread < p.ThreadsCount[i]; thread += 1 {
+				p.log.Printf("Activating thread %d", thread)
+
+				if i == 0 && len(p.Filters) == 1 {
+					p.log.Print("Single filter mode activated")
+					go filter.Proceed(p.InputStream, p.OutputStream)
+				} else if i == 0 && len(p.Filters) > 1 {
+					p.log.Printf("First filter to chain pipeline activated")
+					go filter.Proceed(p.InputStream, p.SubChains[i])
+				} else if i > 0 && i == len(p.Filters)-1 {
+					p.log.Printf("Last filter in chain, #%d", i)
+					go filter.Proceed(p.SubChains[i-1], p.OutputStream)
+				} else if i > 0 && i != len(p.Filters)-1 {
+					p.log.Printf("Middle filter in chain, #%d", i)
+					go filter.Proceed(p.SubChains[i-1], p.SubChains[i])
+				}
 			}
 		}
 	}
