@@ -111,9 +111,9 @@ func (c *ClickhouseOutput) ReadFrom(input chan structs.Message) (err error) {
 	var tx *sql.Tx
 	var stmt *sql.Stmt
 
-	for msg := range input {
-		// c.log.Print(msg)
+	lastFill := time.Now().Unix()
 
+	for msg := range input {
 		if i == 0 {
 			tx, err = connect.Begin()
 			if err != nil {
@@ -171,7 +171,11 @@ func (c *ClickhouseOutput) ReadFrom(input chan structs.Message) (err error) {
 
 		i += 1
 		if i == c.Batch {
-			c.log.Printf("Batch is full. Inserting %d items to database", c.Batch)
+			nowFill := time.Now().Unix()
+			diff := nowFill - lastFill
+			c.log.Printf("Batch filled in %d seconds. Inserting %d items to database", diff, c.Batch)
+			lastFill = nowFill
+
 			err = tx.Commit()
 			if err != nil {
 				c.log.Fatal(err.Error())
@@ -179,8 +183,6 @@ func (c *ClickhouseOutput) ReadFrom(input chan structs.Message) (err error) {
 
 			i = 0
 		}
-
-		//c.log.Print(msg)
 	}
 
 	c.log.Print("ClickHouse: channel finished. Exiting...")

@@ -5,4 +5,6 @@ type Filter interface {
 	SetField(fieldName string) error
 	SetName(filterName string) error
 	GetName() string
+	SetServiceInterval(int)
+	SetDebug(bool)
 }

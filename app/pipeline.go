@@ -20,10 +20,12 @@ type Pipeline struct {
 	Filters      []structs.Filter
 	InputStream  chan structs.Message
 	OutputStream chan structs.Message
+
 	// list of filter channels
-	SubChains      []chan structs.Message
-	SubChainsNames []string
-	ThreadsCount   []int
+	SubChains          []chan structs.Message
+	SubChainsNames     []string
+	ThreadsCount       []int
+	OutputThreadsCount []int
 }
 
 func NewPipeline(configuration Configuration, logger log.Logger) (p Pipeline, err error) {
@@ -36,7 +38,6 @@ func NewPipeline(configuration Configuration, logger log.Logger) (p Pipeline, er
 	}
 	p.log.Printf("Initialized input queue size: %d", inputStreamSize)
 	p.InputStream = make(chan structs.Message, inputStreamSize)
-
 
 	err = p.setupInputs(configuration.In.Input)
 	if err != nil {
@@ -134,6 +135,16 @@ func (p *Pipeline) setupFilters(filtersList []FilterPlugin) (err error) {
 		}
 		filterPlugin.SetName(v.Name)
 		filterPlugin.SetField(v.Field)
+		if v.ServiceInterval == 0 {
+			v.ServiceInterval = 8192
+		}
+
+		if v.Debug {
+			filterPlugin.SetDebug(true)
+			p.log.Printf("Activated debug mode for %s", v.Name)
+		}
+
+		filterPlugin.SetServiceInterval(v.ServiceInterval)
 		p.Filters = append(p.Filters, filterPlugin)
 
 		queueSize := 8192
@@ -141,7 +152,7 @@ func (p *Pipeline) setupFilters(filtersList []FilterPlugin) (err error) {
 			queueSize = v.Queue
 		}
 
-		p.log.Printf("Creating sub-chain for #%d, size: %d", i, queueSize )
+		p.log.Printf("Creating sub-chain for #%d, size: %d", i, queueSize)
 		chain := make(chan structs.Message, queueSize)
 		p.SubChains = append(p.SubChains, chain)
 		p.SubChainsNames = append(p.SubChainsNames, v.Name)
@@ -183,7 +194,13 @@ func (p *Pipeline) setupOutput(outputsList []OutputPlugin) (err error) {
 		if err != nil {
 			return err
 		}
+		threadsCount := 1
+		if v.Threads > 0 {
+			threadsCount = v.Threads
+		}
+
 		p.Outputs = append(p.Outputs, outputPlugin)
+		p.OutputThreadsCount = append(p.OutputThreadsCount, threadsCount)
 	}
 
 	return nil
@@ -229,8 +246,12 @@ func (p *Pipeline) Run() (err error) {
 	}
 
 	for i, output := range p.Outputs {
-		p.log.Printf("Activating output ID#%d", i)
-		go output.ReadFrom(p.OutputStream)
+
+		for j := 0; j < p.OutputThreadsCount[i]; j += 1 {
+			p.log.Printf("Activating output ID#%d, thread %d", i, j)
+
+			go output.ReadFrom(p.OutputStream)
+		}
 	}
 
 	for {

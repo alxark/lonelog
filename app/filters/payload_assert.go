@@ -33,19 +33,21 @@ func NewPayloadAssertFilter(options map[string]string, logger log.Logger) (f *Pa
 }
 
 /**
- * Split content field by delimiter
+ * Main processing loop
  */
 func (f *PayloadAssertFilter) Proceed(input chan structs.Message, output chan structs.Message) (err error) {
 	f.log.Printf("Payload fields assert. Total rules: %d", len(f.FieldOptions))
 
 messageLoop:
 	for msg := range input {
-
 		for fieldName, status := range f.FieldOptions {
 			switch status {
 			case "required":
 				if _, ok := msg.Payload[fieldName]; !ok {
-					f.log.Printf("FILTERED: %s", msg.Payload["url"])
+					if f.Debug {
+						f.log.Printf("FILTERED: %s", msg.Payload["url"])
+					}
+
 					continue messageLoop
 				}
 				break

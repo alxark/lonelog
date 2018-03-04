@@ -1,17 +1,17 @@
 package filters
 
 type BasicFilter struct {
-	Field string
-	Name string
-	Debug bool
+	Field           string
+	Name            string
+	Debug           bool
+	ServiceInterval int
 }
 
 /**
  * Change debug mode
  */
-func (bf *BasicFilter) SetDebug(debug bool) (err error) {
+func (bf *BasicFilter) SetDebug(debug bool) {
 	bf.Debug = debug
-	return
 }
 
 /**
@@ -24,6 +24,10 @@ func (bf *BasicFilter) SetName(name string) (err error) {
 
 func (bf *BasicFilter) GetName() string {
 	return bf.Name
+}
+
+func (bf *BasicFilter) SetServiceInterval(interval int) {
+	bf.ServiceInterval = interval
 }
 
 func (bf *BasicFilter) SetField(fieldName string) (err error) {
