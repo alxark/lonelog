@@ -45,7 +45,7 @@ messageLoop:
 			case "required":
 				if _, ok := msg.Payload[fieldName]; !ok {
 					if f.Debug {
-						f.log.Printf("FILTERED: %s", msg.Payload["url"])
+						f.log.Printf("FILTERED: %s", msg.Payload["content"])
 					}
 
 					continue messageLoop

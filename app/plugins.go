@@ -9,12 +9,13 @@ type InputPlugin struct {
 type FilterPlugin struct {
 	Name            string
 	Threads         int
-	ServiceInterval int `hcl:"service_interval"`
+	ServiceInterval int                 `hcl:"service_interval"`
 	Plugin          string
 	Field           string
 	Queue           int
 	Debug           bool
 	Options         map[string]string
+	Args            []map[string]string `hcl:"arg"`
 }
 
 type OutputPlugin struct {
