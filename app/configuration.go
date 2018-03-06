@@ -7,15 +7,21 @@ import (
 	"errors"
 )
 
+type GlobalConfiguration struct {
+	OutputSplay  int `hcl:"output_splay"`
+	StatInterval int `hcl:"stat_interval"`
+}
+
 type InConfiguration struct {
 	Queue int
 	Input []InputPlugin
 }
 type OutConfiguration struct {
-	Queue int
+	Queue  int
 	Output []OutputPlugin
 }
 type Configuration struct {
+	Global GlobalConfiguration
 	In     InConfiguration
 	Out    OutConfiguration
 	Filter []FilterPlugin

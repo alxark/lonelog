@@ -26,6 +26,9 @@ type Pipeline struct {
 	SubChainsNames     []string
 	ThreadsCount       []int
 	OutputThreadsCount []int
+
+	OutputSplay  int
+	StatInterval int
 }
 
 func NewPipeline(configuration Configuration, logger log.Logger) (p Pipeline, err error) {
@@ -59,6 +62,18 @@ func NewPipeline(configuration Configuration, logger log.Logger) (p Pipeline, er
 	err = p.setupOutput(configuration.Out.Output)
 	if err != nil {
 		return
+	}
+
+	if configuration.Global.StatInterval > 0 {
+		p.StatInterval = configuration.Global.StatInterval
+	} else {
+		p.StatInterval = 30
+	}
+
+	if configuration.Global.OutputSplay > 0 {
+		p.OutputSplay = configuration.Global.OutputSplay
+	} else {
+		p.OutputSplay = 10
 	}
 
 	return
@@ -254,11 +269,15 @@ func (p *Pipeline) Run() (err error) {
 			p.log.Printf("Activating output ID#%d, thread %d", i, j)
 
 			go output.ReadFrom(p.OutputStream)
+			p.log.Printf("Waiting for %d seconds before next activation", p.OutputSplay)
+			time.Sleep(time.Duration(p.OutputSplay) * time.Second)
 		}
 	}
 
+	p.log.Printf("Starting stat check, duration: %d", p.StatInterval)
 	for {
-		time.Sleep(5 * time.Second)
+		time.Sleep(time.Duration(p.StatInterval) * time.Second)
+		
 		p.log.Printf("Input queue: %d, Output queue: %d", len(p.InputStream), len(p.OutputStream))
 		for i, channel := range p.SubChains {
 			p.log.Printf("Sub-channel %s (%d) size is %d", p.SubChainsNames[i], i, len(channel))
