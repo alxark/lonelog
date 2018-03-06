@@ -122,6 +122,9 @@ func (p *Pipeline) setupFilters(filtersList []FilterPlugin) (err error) {
 		case "substr_contains":
 			filterPlugin, err = filters.NewSubstrContainsFilter(v.Options, p.log)
 			break
+		case "copy":
+			filterPlugin, err = filters.NewCopyFilter(v.Options, p.log)
+			break
 		default:
 			return errors.New(fmt.Sprintf("plugin #%d not found: %s", i, v.Plugin))
 		}
