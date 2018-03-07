@@ -82,18 +82,30 @@ func NewPipeline(configuration Configuration, logger log.Logger) (p Pipeline, er
 func (p *Pipeline) setupInputs(inputsList []InputPlugin) (err error) {
 	p.log.Printf("Total inputs found: %d", len(inputsList))
 
-	p.InputStream = make(chan structs.Message, CHAIN_SIZE)
 
 	for _, v := range inputsList {
+		var inputPlugin structs.Input
 		switch(v.Plugin) {
 		case "syslog":
-			syslogPlugin, err := inputs.NewSyslog(v.Options, p.log)
+			inputPlugin, err = inputs.NewSyslog(v.Options, p.log)
+			break
+		}
 
-			if err != nil {
-				return err
+		if err != nil {
+			return err
+		}
+
+		if v.Threads > 1 {
+			if inputPlugin.IsMultiThread() {
+				for i := 0; i < v.Threads; i += 1 {
+					p.Inputs = append(p.Inputs, inputPlugin)
+				}
+			} else {
+				p.log.Printf("multi-threaded mode is not support for %s", v.Plugin)
+				p.Inputs = append(p.Inputs, inputPlugin)
 			}
-
-			p.Inputs = append(p.Inputs, syslogPlugin)
+		} else {
+			p.Inputs = append(p.Inputs, inputPlugin)
 		}
 	}
 
@@ -205,6 +217,9 @@ func (p *Pipeline) setupOutput(outputsList []OutputPlugin) (err error) {
 		case "clickhouse":
 			outputPlugin, err = outputs.NewClickhouseOutput(v.Options, p.log)
 			break
+		case "redis":
+			outputPlugin, err = outputs.NewRedisOutput(v.Options, p.log)
+			break
 		default:
 			return errors.New("failed to initialize output: " + v.Plugin)
 		}
@@ -277,7 +292,7 @@ func (p *Pipeline) Run() (err error) {
 	p.log.Printf("Starting stat check, duration: %d", p.StatInterval)
 	for {
 		time.Sleep(time.Duration(p.StatInterval) * time.Second)
-		
+
 		p.log.Printf("Input queue: %d, Output queue: %d", len(p.InputStream), len(p.OutputStream))
 		for i, channel := range p.SubChains {
 			p.log.Printf("Sub-channel %s (%d) size is %d", p.SubChainsNames[i], i, len(channel))

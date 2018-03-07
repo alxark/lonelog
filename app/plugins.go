@@ -3,6 +3,7 @@ package app
 type InputPlugin struct {
 	Name    string
 	Plugin  string
+	Threads int
 	Options map[string]string
 }
 

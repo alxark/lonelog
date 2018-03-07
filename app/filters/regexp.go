@@ -115,6 +115,9 @@ func (f *RegexpFilter) Proceed(input chan structs.Message, output chan structs.M
 
 		if j == f.ServiceInterval {
 			j = 0
+			if f.Debug {
+				f.log.Printf("Starting regexp re-arrange process")
+			}
 
 			for i, e := range expList {
 				if f.Debug {

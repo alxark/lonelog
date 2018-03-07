@@ -166,11 +166,12 @@ func (c *ClickhouseOutput) ReadFrom(input chan structs.Message) (err error) {
 		}
 
 		if _, err := stmt.Exec(arguments...); err != nil {
-			c.log.Fatal(err)
+			c.log.Print("failed to proceed row: %s, got: %s", arguments, err.Error())
+			continue
 		}
 
 		i += 1
-		if i == c.Batch {
+		if i >= c.Batch {
 			nowFill := time.Now().Unix()
 			diff := nowFill - lastFill
 			c.log.Printf("Batch filled in %d seconds. Inserting %d items to database", diff, c.Batch)

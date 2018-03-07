@@ -55,6 +55,10 @@ func NewSyslog(options map[string]string, logger log.Logger) (s *Syslog, err err
 	return
 }
 
+func (s *Syslog) IsMultiThread() bool {
+	return false
+}
+
 /**
  * Accept messages and send them to channel
  */
