@@ -78,6 +78,8 @@ func (o *RedisOutput) ReadFrom(input chan structs.Message) (err error) {
 	}
 
 	cachePos := 0
+
+messageCycle:
 	for msg := range input {
 		info, err := json.Marshal(msg)
 		if err != nil {
@@ -95,7 +97,7 @@ func (o *RedisOutput) ReadFrom(input chan structs.Message) (err error) {
 
 				if cmdResult.Err() == nil {
 					o.log.Printf("Inserted data to redis. Size: %d. Try: %d", o.Batch, retry)
-					break
+					continue messageCycle
 				}
 
 				o.log.Printf("failed to push resolve. got: %s", cmdResult.Err())
@@ -112,6 +114,8 @@ func (o *RedisOutput) ReadFrom(input chan structs.Message) (err error) {
 
 				time.Sleep(time.Duration(2*retry) * time.Second)
 			}
+
+			o.log.Print("failed to insert data batch")
 		}
 	}
 
