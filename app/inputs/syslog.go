@@ -106,7 +106,7 @@ func (s *Syslog) AcceptTo(output chan structs.Message) (err error) {
  */
 func (s *Syslog) reformatMessage(logItem map[string]interface{}) (msg structs.Message, err error) {
 	msg.Hostname = logItem["hostname"].(string)
-	msg.Content = logItem["content"].(string)
+	msg.Content = ""
 
 	ts := logItem["timestamp"].(time.Time)
 
@@ -114,7 +114,7 @@ func (s *Syslog) reformatMessage(logItem map[string]interface{}) (msg structs.Me
 	msg.Payload = make(map[string]string)
 
 	payload := msg.Payload
-	payload["content"] = msg.Content
+	payload["content"] = logItem["content"].(string)
 	payload["hostname"] = msg.Hostname
 	msg.Payload = payload
 

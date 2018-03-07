@@ -84,7 +84,13 @@ func (o *RedisInput) AcceptTo(output chan structs.Message) (err error) {
 		sliceCmd := client.BLPop(10*time.Second, o.Key)
 		res, err := sliceCmd.Result()
 		if err != nil {
-			o.log.Print(err.Error())
+			client = redis.NewClient(&redis.Options{
+				Addr:     o.Inputs[0].Addr,
+				Password: "",
+				DB:       0,
+			})
+			o.log.Printf("re-established connection to %s", o.Inputs[0].Addr)
+
 			continue
 		}
 		msg := structs.Message{}
