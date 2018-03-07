@@ -82,12 +82,14 @@ func NewPipeline(configuration Configuration, logger log.Logger) (p Pipeline, er
 func (p *Pipeline) setupInputs(inputsList []InputPlugin) (err error) {
 	p.log.Printf("Total inputs found: %d", len(inputsList))
 
-
 	for _, v := range inputsList {
 		var inputPlugin structs.Input
 		switch(v.Plugin) {
 		case "syslog":
 			inputPlugin, err = inputs.NewSyslog(v.Options, p.log)
+			break
+		case "redis":
+			inputPlugin, err = inputs.NewRedisInput(v.Options, p.log)
 			break
 		}
 
