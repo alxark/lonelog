@@ -81,6 +81,8 @@ func (o *RedisInput) AcceptTo(output chan structs.Message) (err error) {
 	benchmarkStart := time.Now().Unix()
 
 	for {
+		i += 1
+		
 		sliceCmd := client.BLPop(10*time.Second, o.Key)
 		res, err := sliceCmd.Result()
 		if err != nil {
@@ -89,6 +91,7 @@ func (o *RedisInput) AcceptTo(output chan structs.Message) (err error) {
 				Password: "",
 				DB:       0,
 			})
+			time.Sleep(1 * time.Second)
 			o.log.Printf("re-established connection to %s", o.Inputs[0].Addr)
 
 			continue
