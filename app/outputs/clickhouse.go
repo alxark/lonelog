@@ -12,6 +12,8 @@ import (
 	"fmt"
 )
 
+const ClickhouseTimeThreshold = 60
+
 type ClickhouseOutput struct {
 	log log.Logger
 
@@ -20,6 +22,7 @@ type ClickhouseOutput struct {
 
 	Dsn   string
 	Batch int
+	Threshold int64
 	Table string
 }
 
@@ -64,6 +67,16 @@ func NewClickhouseOutput(options map[string]string, logger log.Logger) (c *Click
 		}
 	} else {
 		c.Batch = 100
+	}
+
+	if threshold, ok := options["threshold"]; ok {
+		threshold, err := strconv.Atoi(threshold)
+		if err != nil {
+			c.Threshold = int64(ClickhouseTimeThreshold)
+		}
+		c.Threshold = int64(threshold)
+	} else {
+		c.Threshold = int64(ClickhouseTimeThreshold)
 	}
 
 	c.log.Printf("Initialized ClickHouse to %s, batch: %d", c.Dsn, c.Batch)
@@ -112,6 +125,9 @@ func (c *ClickhouseOutput) ReadFrom(input chan structs.Message) (err error) {
 	var stmt *sql.Stmt
 
 	lastFill := time.Now().Unix()
+	currentTime := time.Now().Unix()
+
+	var arguments []interface{}
 
 	for msg := range input {
 		if i == 0 {
@@ -128,41 +144,10 @@ func (c *ClickhouseOutput) ReadFrom(input chan structs.Message) (err error) {
 			}
 		}
 
-		var arguments []interface{}
-		for i, fieldName := range c.Fields {
-			var value string
-			if _, ok := msg.Payload[fieldName]; !ok {
-				value = ""
-			}
 
-			value = msg.Payload[fieldName]
-
-			switch c.FieldsTypes[i] {
-			case "int":
-				convert, err := strconv.Atoi(value)
-				if err != nil {
-					convert = 0
-				}
-				arguments = append(arguments, convert)
-				break
-			case "float":
-				convert, err := strconv.ParseFloat(value, 32)
-				if err != nil {
-					convert = 0.0
-				}
-				arguments = append(arguments, convert)
-			case "datetime":
-				convert, err := time.Parse("2006-01-02 15:04:05", value)
-				if err != nil {
-					convert = time.Now()
-				}
-				arguments = append(arguments, convert)
-			case "string":
-				arguments = append(arguments, value)
-				break
-			default:
-				arguments = append(arguments, value)
-			}
+		arguments, err = c.PrepareArguments(msg.Payload)
+		if err != nil {
+			continue
 		}
 
 		if _, err := stmt.Exec(arguments...); err != nil {
@@ -171,15 +156,34 @@ func (c *ClickhouseOutput) ReadFrom(input chan structs.Message) (err error) {
 		}
 
 		i += 1
-		if i >= c.Batch {
-			nowFill := time.Now().Unix()
-			diff := nowFill - lastFill
-			c.log.Printf("Batch filled in %d seconds. Inserting %d items to database", diff, c.Batch)
-			lastFill = nowFill
+
+		if i % 100 == 0 {
+			currentTime = time.Now().Unix()
+		}
+
+		if i >= c.Batch || currentTime - c.Threshold > lastFill {
+			currentTime = time.Now().Unix()
+			diff := currentTime - lastFill
+			c.log.Printf("Batch filled in %d seconds. Inserting %d items to database", diff, i)
+			lastFill = currentTime
 
 			err = tx.Commit()
 			if err != nil {
-				c.log.Fatal(err.Error())
+				c.log.Printf("failed to complete transaction: %s", err.Error())
+
+				tx, err = connect.Begin()
+				if err != nil {
+					c.log.Print("failed to initialize transaction: " + err.Error())
+					time.Sleep(5 * time.Second)
+					continue
+				}
+
+				stmt, err = tx.Prepare(query)
+				if err != nil {
+					c.log.Fatal(err.Error())
+				}
+
+				continue
 			}
 
 			i = 0
@@ -188,4 +192,47 @@ func (c *ClickhouseOutput) ReadFrom(input chan structs.Message) (err error) {
 
 	c.log.Print("ClickHouse: channel finished. Exiting...")
 	return
+}
+
+/**
+ * Format arguments for clickhouse driver
+ */
+func (c *ClickhouseOutput) PrepareArguments(payload map[string]string) (arguments []interface{}, err error) {
+	for i, fieldName := range c.Fields {
+		var value string
+		if _, ok := payload[fieldName]; !ok {
+			value = ""
+		}
+
+		value = payload[fieldName]
+
+		switch c.FieldsTypes[i] {
+		case "int":
+			convert, err := strconv.Atoi(value)
+			if err != nil {
+				convert = 0
+			}
+			arguments = append(arguments, convert)
+			break
+		case "float":
+			convert, err := strconv.ParseFloat(value, 32)
+			if err != nil {
+				convert = 0.0
+			}
+			arguments = append(arguments, convert)
+		case "datetime":
+			convert, err := time.Parse("2006-01-02 15:04:05", value)
+			if err != nil {
+				convert = time.Now()
+			}
+			arguments = append(arguments, convert)
+		case "string":
+			arguments = append(arguments, value)
+			break
+		default:
+			arguments = append(arguments, value)
+		}
+	}
+
+	return arguments, err
 }
