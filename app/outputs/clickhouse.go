@@ -98,7 +98,7 @@ func pingDsn(dsn string) (err error) {
 	return
 }
 
-func (c *ClickhouseOutput) ReadFrom(input chan structs.Message) (err error) {
+func (c *ClickhouseOutput) ReadFrom(input chan structs.Message,  runtimeOptions map[string]string) (err error) {
 
 	connect, err := sql.Open("clickhouse", c.Dsn)
 	if err != nil {

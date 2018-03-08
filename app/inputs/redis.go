@@ -9,11 +9,17 @@ import (
 	"strings"
 	"time"
 	"encoding/json"
-	"math"
 	"strconv"
 )
 
 const DEFAULTKEY = "logs"
+
+const (
+	fetchModeRangeTrim = 1
+	fetchModePop       = 2
+
+	defaultBatchSize = 10000
+)
 
 type RedisInput struct {
 	BasicInput
@@ -22,7 +28,8 @@ type RedisInput struct {
 
 	Inputs    []Connections
 	Key       string
-	Benchmark int
+	Batch     int
+	FetchMode int
 }
 
 type Connections struct {
@@ -45,13 +52,25 @@ func NewRedisInput(options map[string]string, logger log.Logger) (o *RedisInput,
 		o.Key = DEFAULTKEY
 	}
 
-	if benchmark, ok := options["benchmark"]; ok {
-		o.Benchmark, err = strconv.Atoi(benchmark)
-		if err != nil {
-			o.Benchmark = 100000
+	if fetchMode, ok := options["mode"]; ok {
+		if fetchMode == "range" {
+			o.FetchMode = fetchModeRangeTrim
+			o.log.Print("Attention! Fetch mode RANGE-TRIM activated. Make sure there is no additional threads for this key")
+		} else {
+			o.FetchMode = fetchModePop
 		}
 	} else {
-		o.Benchmark = 100000
+		o.FetchMode = fetchModePop
+	}
+
+	if batchOrig, ok := options["batch"]; ok {
+		batch, err := strconv.Atoi(batchOrig)
+		if err != nil {
+			o.Batch = defaultBatchSize
+		}
+		o.Batch = batch
+	} else {
+		o.Batch = defaultBatchSize
 	}
 
 	for _, v := range strings.Split(options["servers"], ",") {
@@ -63,59 +82,120 @@ func NewRedisInput(options map[string]string, logger log.Logger) (o *RedisInput,
 	return o, nil
 }
 
-func (o *RedisInput) AcceptTo(output chan structs.Message) (err error) {
-	o.log.Printf("Started redis output, benchmark %d", o.Benchmark)
-
-	client := redis.NewClient(&redis.Options{
-		Addr:     o.Inputs[0].Addr,
-		Password: "",
-		DB:       0,
-	})
-
-	_, err = client.Ping().Result()
-	if err != nil {
-		o.log.Printf("Failed to ping server. Got: " + err.Error())
-	}
-
-	i := 0
-	benchmarkStart := time.Now().Unix()
-
+func (o *RedisInput) GetRedisConnection() (client *redis.Client, err error) {
 	for {
-		i += 1
-		
-		sliceCmd := client.BLPop(10*time.Second, o.Key)
-		res, err := sliceCmd.Result()
+		client := redis.NewClient(&redis.Options{
+			Addr:     o.Inputs[0].Addr,
+			Password: "",
+			DB:       0,
+		})
+
+		_, err = client.Ping().Result()
 		if err != nil {
-			client = redis.NewClient(&redis.Options{
-				Addr:     o.Inputs[0].Addr,
-				Password: "",
-				DB:       0,
-			})
+			o.log.Printf("Failed to ping server. Got: " + err.Error())
 			time.Sleep(1 * time.Second)
-			o.log.Printf("re-established connection to %s", o.Inputs[0].Addr)
-
-			continue
-		}
-		msg := structs.Message{}
-		err = json.Unmarshal([]byte(res[1]), &msg)
-
-		if err != nil {
-			o.log.Print(err.Error())
 			continue
 		}
 
-		output <- msg
-
-		if i >= o.Benchmark {
-			benchmarkNow := time.Now().Unix()
-
-			rps := math.Floor(float64(o.Benchmark) / float64(benchmarkNow-benchmarkStart))
-			o.log.Printf("Processed %d, processing speed: %f RPS", o.Benchmark, rps)
-
-			benchmarkStart = benchmarkNow
-			i = 0
-		}
+		o.log.Printf("Redis connection established to %s", o.Inputs[0].Addr)
+		return client, err
 	}
+}
 
-	return
+func (o *RedisInput) AcceptTo(output chan structs.Message) (err error) {
+	o.log.Printf("Started redis input. Input key: %s", o.Key)
+
+	if o.FetchMode == fetchModeRangeTrim {
+		return o.ProcessRangeTrim(output)
+	} else {
+		return o.ProcessPop(output)
+	}
+	/**
+		for {
+			i += 1
+
+			client.LRange(o.Key, 0, o.Batch - 1)
+
+			resultSetSize, -1
+
+
+
+			sliceCmd := client.LPop(o.Key)
+			res, err := sliceCmd.Result()
+			if err != nil {
+				client = redis.NewClient(&redis.Options{
+					Addr:     o.Inputs[0].Addr,
+					Password: "",
+					DB:       0,
+				})
+				time.Sleep(1 * time.Second)
+				o.log.Printf("re-established connection to %s", o.Inputs[0].Addr)
+
+				continue
+			}
+			msg := structs.Message{}
+			err = json.Unmarshal([]byte(res), &msg)
+
+			if err != nil {
+				o.log.Print(err.Error())
+				continue
+			}
+
+			o.log.Printf("new msg: %d", i)
+			output <- msg
+		}
+
+		return*/
+}
+
+func (o *RedisInput) ProcessRangeTrim(output chan structs.Message) (err error) {
+	o.log.Print("Started redis reader. Fetch mode LRANGE-LTRIM. Batch: %d", o.Batch)
+	client, err := o.GetRedisConnection()
+
+	processed := 0
+	for {
+		res := client.LRange(o.Key, 0, int64(o.Batch - 1))
+		if err != nil {
+			o.log.Print("failed to connect. got: " + err.Error() + ", going to reconnect")
+			client, err = o.GetRedisConnection()
+			if err != nil {
+				time.Sleep(10 * time.Second)
+			}
+
+			continue
+		}
+
+		items, err := res.Result()
+		if err != nil {
+			o.log.Print("Failed to fetch result. Got: " + err.Error())
+			continue
+		}
+
+		cmdRes := client.LTrim(o.Key, int64(len(items)), -1)
+		if cmdRes.Err() != nil {
+			o.log.Print("failed to run LTRIM command. Got: " + cmdRes.Err().Error())
+			continue
+		}
+
+		for _, item := range items {
+			processed += 1
+			msg := structs.Message{}
+			err = json.Unmarshal([]byte(item), &msg)
+
+			if err != nil {
+				o.log.Print("failed to decode message: " + err.Error())
+				continue
+			}
+
+			output <- msg
+		}
+
+		o.log.Printf("Total messages processed: %d", processed)
+	}
+}
+
+func (o *RedisInput) ProcessPop(output chan structs.Message) (err error) {
+	o.log.Print("Started redis reader. Fetch mode BLPOP")
+
+	return err
 }

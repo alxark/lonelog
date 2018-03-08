@@ -11,10 +11,14 @@ import (
 	"time"
 )
 
-const DEFAULTBATCHSIZE = 100
-const DEFAULTKEY = "logs"
+const (
+	redisDefaultBatchSize = 1000
+	redisDefaultKey = "logs"
+)
 
 type RedisOutput struct {
+	BasicOutput
+
 	log log.Logger
 
 	OutputMode string // available modes - sharding or replica
@@ -36,10 +40,10 @@ func NewRedisOutput(options map[string]string, logger log.Logger) (o *RedisOutpu
 	if batchSize, ok := options["batch"]; ok {
 		o.Batch, err = strconv.Atoi(batchSize)
 		if err != nil {
-			o.Batch = DEFAULTBATCHSIZE
+			o.Batch = redisDefaultBatchSize
 		}
 	} else {
-		o.Batch = DEFAULTBATCHSIZE
+		o.Batch = redisDefaultBatchSize
 	}
 
 	if _, ok := options["servers"]; !ok {
@@ -49,7 +53,7 @@ func NewRedisOutput(options map[string]string, logger log.Logger) (o *RedisOutpu
 	if key, ok := options["key"]; ok {
 		o.Key = key
 	} else {
-		o.Key = DEFAULTKEY
+		o.Key = redisDefaultKey
 	}
 
 	for _, v := range strings.Split(options["servers"], ",") {
@@ -61,8 +65,10 @@ func NewRedisOutput(options map[string]string, logger log.Logger) (o *RedisOutpu
 	return o, nil
 }
 
-func (o *RedisOutput) ReadFrom(input chan structs.Message) (err error) {
-	o.log.Printf("Started redis output, batch: %d", o.Batch)
+func (o *RedisOutput) ReadFrom(input chan structs.Message, runtimeOptions map[string]string) (err error) {
+	keyName := o.PrepareStringVariable(o.Key, runtimeOptions)
+
+	o.log.Printf("Started redis output, batch: %d, output to %s", o.Batch, keyName)
 
 	cache := make([]interface{}, o.Batch)
 
@@ -93,7 +99,7 @@ messageCycle:
 			cachePos = 0
 
 			for retry := 0; retry < 32; retry += 1 {
-				cmdResult := client.LPush(o.Key, cache...)
+				cmdResult := client.RPush(o.Key, cache...)
 
 				if cmdResult.Err() == nil {
 					o.log.Printf("Inserted data to redis. Size: %d. Try: %d", o.Batch, retry)

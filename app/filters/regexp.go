@@ -77,8 +77,10 @@ func (f *RegexpFilter) Proceed(input chan structs.Message, output chan structs.M
 
 	j := 0
 	sortPos := 0
+	processed := 0
 	for msg := range input {
 		j += 1
+		processed += 1
 
 		// skip records without target field
 		if _, ok := msg.Payload[f.Field]; !ok {
@@ -116,7 +118,7 @@ func (f *RegexpFilter) Proceed(input chan structs.Message, output chan structs.M
 		if j == f.ServiceInterval {
 			j = 0
 			if f.Debug {
-				f.log.Printf("Starting regexp re-arrange process")
+				f.log.Printf("Starting regexp re-arrange process, total processed: %d", processed)
 			}
 
 			for i, e := range expList {

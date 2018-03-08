@@ -34,7 +34,7 @@ func NewStatOutput(options map[string]string, logger log.Logger) (s *StatOutput,
 	return s, nil
 }
 
-func (s *StatOutput) ReadFrom(input chan structs.Message) (err error) {
+func (s *StatOutput) ReadFrom(input chan structs.Message, runtimeOptions map[string]string) (err error) {
 	s.log.Printf("Started stat output. Period: %d", s.Period)
 
 	start := time.Now().Unix()

@@ -9,6 +9,7 @@ import (
 	"github.com/alxark/lonelog/app/filters"
 	"errors"
 	"fmt"
+	"strconv"
 )
 
 const CHAIN_SIZE = 8192
@@ -281,11 +282,14 @@ func (p *Pipeline) Run() (err error) {
 	}
 
 	for i, output := range p.Outputs {
-
 		for j := 0; j < p.OutputThreadsCount[i]; j += 1 {
+			options := make(map[string]string)
+
 			p.log.Printf("Activating output ID#%d, thread %d", i, j)
 
-			go output.ReadFrom(p.OutputStream)
+			options["THREAD"] = strconv.Itoa(j)
+
+			go output.ReadFrom(p.OutputStream, options)
 			p.log.Printf("Waiting for %d seconds before next activation", p.OutputSplay)
 			time.Sleep(time.Duration(p.OutputSplay) * time.Second)
 		}

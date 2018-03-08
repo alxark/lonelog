@@ -1,5 +1,5 @@
 package structs
 
 type Output interface {
-	ReadFrom(chan Message) error
+	ReadFrom(chan Message, map[string]string) error
 }

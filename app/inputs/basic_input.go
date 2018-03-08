@@ -1,6 +1,5 @@
 package inputs
 
-
 type BasicInput struct {
 }
 
