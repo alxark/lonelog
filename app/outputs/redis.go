@@ -99,7 +99,7 @@ messageCycle:
 			cachePos = 0
 
 			for retry := 0; retry < 32; retry += 1 {
-				cmdResult := client.RPush(o.Key, cache...)
+				cmdResult := client.RPush(keyName, cache...)
 
 				if cmdResult.Err() == nil {
 					o.log.Printf("Inserted data to redis. Size: %d. Try: %d", o.Batch, retry)
