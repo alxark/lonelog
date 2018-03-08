@@ -177,6 +177,11 @@ func (o *RedisInput) ProcessRangeTrim(output chan structs.Message) (err error) {
 			continue
 		}
 
+		if len(items) == 0 {
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+
 		for _, item := range items {
 			processed += 1
 			msg := structs.Message{}
