@@ -102,57 +102,20 @@ func (o *RedisInput) GetRedisConnection() (client *redis.Client, err error) {
 	}
 }
 
-func (o *RedisInput) AcceptTo(output chan structs.Message) (err error) {
+func (o *RedisInput) AcceptTo(output chan structs.Message, counter chan int) (err error) {
 	o.log.Printf("Started redis input. Input key: %s", o.Key)
 
 	if o.FetchMode == fetchModeRangeTrim {
-		return o.ProcessRangeTrim(output)
+		return o.ProcessRangeTrim(output, counter)
 	} else {
-		return o.ProcessPop(output)
+		return o.ProcessPop(output, counter)
 	}
-	/**
-		for {
-			i += 1
-
-			client.LRange(o.Key, 0, o.Batch - 1)
-
-			resultSetSize, -1
-
-
-
-			sliceCmd := client.LPop(o.Key)
-			res, err := sliceCmd.Result()
-			if err != nil {
-				client = redis.NewClient(&redis.Options{
-					Addr:     o.Inputs[0].Addr,
-					Password: "",
-					DB:       0,
-				})
-				time.Sleep(1 * time.Second)
-				o.log.Printf("re-established connection to %s", o.Inputs[0].Addr)
-
-				continue
-			}
-			msg := structs.Message{}
-			err = json.Unmarshal([]byte(res), &msg)
-
-			if err != nil {
-				o.log.Print(err.Error())
-				continue
-			}
-
-			o.log.Printf("new msg: %d", i)
-			output <- msg
-		}
-
-		return*/
 }
 
-func (o *RedisInput) ProcessRangeTrim(output chan structs.Message) (err error) {
+func (o *RedisInput) ProcessRangeTrim(output chan structs.Message, counter chan int) (err error) {
 	o.log.Print("Started redis reader. Fetch mode LRANGE-LTRIM. Batch: %d", o.Batch)
 	client, err := o.GetRedisConnection()
 
-	processed := 0
 	for {
 		res := client.LRange(o.Key, 0, int64(o.Batch - 1))
 		if err != nil {
@@ -182,8 +145,8 @@ func (o *RedisInput) ProcessRangeTrim(output chan structs.Message) (err error) {
 			continue
 		}
 
+		chunkProcessed := 0
 		for _, item := range items {
-			processed += 1
 			msg := structs.Message{}
 			err = json.Unmarshal([]byte(item), &msg)
 
@@ -192,15 +155,49 @@ func (o *RedisInput) ProcessRangeTrim(output chan structs.Message) (err error) {
 				continue
 			}
 
+			chunkProcessed += 1
+
 			output <- msg
 		}
 
-		o.log.Printf("Total messages processed: %d", processed)
+		counter <- chunkProcessed
 	}
 }
 
-func (o *RedisInput) ProcessPop(output chan structs.Message) (err error) {
+func (o *RedisInput) ProcessPop(output chan structs.Message, counter chan int) (err error) {
 	o.log.Print("Started redis reader. Fetch mode BLPOP")
+
+	/**
+	for {
+		i += 1
+
+
+		sliceCmd := client.LPop(o.Key)
+		res, err := sliceCmd.Result()
+		if err != nil {
+			client = redis.NewClient(&redis.Options{
+				Addr:     o.Inputs[0].Addr,
+				Password: "",
+				DB:       0,
+			})
+			time.Sleep(1 * time.Second)
+			o.log.Printf("re-established connection to %s", o.Inputs[0].Addr)
+
+			continue
+		}
+		msg := structs.Message{}
+		err = json.Unmarshal([]byte(res), &msg)
+
+		if err != nil {
+			o.log.Print(err.Error())
+			continue
+		}
+
+		o.log.Printf("new msg: %d", i)
+		output <- msg
+	}
+
+	return*/
 
 	return err
 }

@@ -65,7 +65,7 @@ func NewRedisOutput(options map[string]string, logger log.Logger) (o *RedisOutpu
 	return o, nil
 }
 
-func (o *RedisOutput) ReadFrom(input chan structs.Message, runtimeOptions map[string]string) (err error) {
+func (o *RedisOutput) ReadFrom(input chan structs.Message, runtimeOptions map[string]string, counter chan int) (err error) {
 	keyName := o.PrepareStringVariable(o.Key, runtimeOptions)
 
 	o.log.Printf("Started redis output, batch: %d, output to %s", o.Batch, keyName)

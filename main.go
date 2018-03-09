@@ -20,10 +20,20 @@ func main() {
 		logger.Fatal("Configuration parsing error. Got: " + err.Error())
 	}
 
+	var pipelines []*app.Pipeline
 	pipeline, err := app.NewPipeline(*cfg, *logger)
 	if err != nil {
 		logger.Fatal(err)
 	}
+	pipelines = append(pipelines, &pipeline)
 
-	pipeline.Run()
+	httpApi, err := app.NewHttp(*logger, pipelines)
+
+	for i := range pipelines {
+		logger.Printf("Starting pipeline #%d", i)
+		go pipelines[i].Run()
+	}
+
+	logger.Print("Starting HTTP API")
+	httpApi.Serve(":40000")
 }

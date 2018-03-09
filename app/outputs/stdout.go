@@ -19,7 +19,7 @@ func NewStdoutOutput(options map[string]string, logger log.Logger) (s *StdoutOut
 	return s, nil
 }
 
-func (s *StdoutOutput) ReadFrom(input chan structs.Message, runtimeOptions map[string]string) (err error) {
+func (s *StdoutOutput) ReadFrom(input chan structs.Message, runtimeOptions map[string]string, counter chan int) (err error) {
 	for msg := range input {
 		marshaled, err := json.Marshal(msg)
 		if err != nil {

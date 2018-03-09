@@ -19,7 +19,9 @@ type Syslog struct {
 	Port  int
 }
 
-const BENCHMARKLIMIT = 1000000
+const (
+	statDumpInterval = 1000
+)
 
 func NewSyslog(options map[string]string, logger log.Logger) (s *Syslog, err error) {
 	s = &Syslog{}
@@ -62,7 +64,7 @@ func (s *Syslog) IsMultiThread() bool {
 /**
  * Accept messages and send them to channel
  */
-func (s *Syslog) AcceptTo(output chan structs.Message) (err error) {
+func (s *Syslog) AcceptTo(output chan structs.Message, counter chan int) (err error) {
 	s.log.Printf("Starting syslog acceptor on %s:%d, queue size: %d", s.Ip, s.Port, s.QueueSize)
 
 	channel := make(syslog.LogPartsChannel, s.QueueSize)
@@ -75,7 +77,6 @@ func (s *Syslog) AcceptTo(output chan structs.Message) (err error) {
 	server.Boot()
 
 	i := 0
-	benchmarkStart := time.Now().Unix()
 
 	for logItem := range channel {
 		i += 1
@@ -85,13 +86,8 @@ func (s *Syslog) AcceptTo(output chan structs.Message) (err error) {
 			continue
 		}
 
-		if i >= BENCHMARKLIMIT {
-			benchmarkNow := time.Now().Unix()
-
-			rps := math.Floor(float64(BENCHMARKLIMIT) / float64(benchmarkNow - benchmarkStart))
-			s.log.Printf("Processed %d, processing speed: %f RPS", BENCHMARKLIMIT, rps)
-
-			benchmarkStart = benchmarkNow
+		if i >= statDumpInterval {
+			counter <- i
 			i = 0
 		}
 

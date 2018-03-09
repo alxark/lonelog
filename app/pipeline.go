@@ -5,14 +5,27 @@ import (
 	"time"
 	"github.com/alxark/lonelog/app/inputs"
 	"github.com/alxark/lonelog/app/outputs"
-	"github.com/alxark/lonelog/structs"
 	"github.com/alxark/lonelog/app/filters"
+	"github.com/alxark/lonelog/structs"
 	"errors"
 	"fmt"
 	"strconv"
 )
 
-const CHAIN_SIZE = 8192
+const (
+	defaultChannelSize = 8192
+
+	// how oftern plugins should do their internal service procedures (stat calculation,
+	// data optimization and other such stuff)
+	defaultServiceInterval = 8192
+
+	// default offset between output service start. splay is used to separate
+	// launch of different threads and prevent too many write operations in one moment
+	defaultOutputSplay = 5
+
+	// how often to collect service statistics about inner queues
+	defaultStatInterval = 30
+)
 
 type Pipeline struct {
 	log          log.Logger
@@ -30,13 +43,17 @@ type Pipeline struct {
 
 	OutputSplay  int
 	StatInterval int
+	Bench        *Benchmark
+
+	Status PipelineStatus
 }
 
 func NewPipeline(configuration Configuration, logger log.Logger) (p Pipeline, err error) {
 	p.log = logger
 	p.log.Println("Initializing new pipeline")
+	p.Bench, _ = NewBenchmark(p.log)
 
-	inputStreamSize := 8192
+	inputStreamSize := defaultChannelSize
 	if configuration.In.Queue > 0 {
 		inputStreamSize = configuration.In.Queue
 	}
@@ -53,7 +70,7 @@ func NewPipeline(configuration Configuration, logger log.Logger) (p Pipeline, er
 		return
 	}
 
-	outputStreamSize := 8192
+	outputStreamSize := defaultChannelSize
 	if configuration.Out.Queue > 0 {
 		outputStreamSize = configuration.Out.Queue
 	}
@@ -68,13 +85,13 @@ func NewPipeline(configuration Configuration, logger log.Logger) (p Pipeline, er
 	if configuration.Global.StatInterval > 0 {
 		p.StatInterval = configuration.Global.StatInterval
 	} else {
-		p.StatInterval = 30
+		p.StatInterval = defaultStatInterval
 	}
 
 	if configuration.Global.OutputSplay > 0 {
 		p.OutputSplay = configuration.Global.OutputSplay
 	} else {
-		p.OutputSplay = 10
+		p.OutputSplay = defaultOutputSplay
 	}
 
 	return
@@ -168,8 +185,9 @@ func (p *Pipeline) setupFilters(filtersList []FilterPlugin) (err error) {
 		}
 		filterPlugin.SetName(v.Name)
 		filterPlugin.SetField(v.Field)
+
 		if v.ServiceInterval == 0 {
-			v.ServiceInterval = 8192
+			v.ServiceInterval = defaultServiceInterval
 		}
 
 		if v.Debug {
@@ -180,7 +198,7 @@ func (p *Pipeline) setupFilters(filtersList []FilterPlugin) (err error) {
 		filterPlugin.SetServiceInterval(v.ServiceInterval)
 		p.Filters = append(p.Filters, filterPlugin)
 
-		queueSize := 8192
+		queueSize := defaultChannelSize
 		if v.Queue > 0 {
 			queueSize = v.Queue
 		}
@@ -205,8 +223,6 @@ func (p *Pipeline) setupFilters(filtersList []FilterPlugin) (err error) {
  * Setup output plugins
  */
 func (p *Pipeline) setupOutput(outputsList []OutputPlugin) (err error) {
-	p.OutputStream = make(chan structs.Message, CHAIN_SIZE)
-
 	for _, v := range outputsList {
 		var outputPlugin structs.Output
 
@@ -239,6 +255,8 @@ func (p *Pipeline) setupOutput(outputsList []OutputPlugin) (err error) {
 		p.OutputThreadsCount = append(p.OutputThreadsCount, threadsCount)
 	}
 
+	p.log.Printf("Output initialization finished")
+
 	return nil
 }
 
@@ -246,9 +264,11 @@ func (p *Pipeline) setupOutput(outputsList []OutputPlugin) (err error) {
  * Proceed pipeline stuff
  */
 func (p *Pipeline) Run() (err error) {
+	p.log.Printf("Starting pipeline processing")
+
 	for i, input := range p.Inputs {
 		p.log.Printf("Activating input ID#%d", i)
-		go input.AcceptTo(p.InputStream)
+		go input.AcceptTo(p.InputStream, p.Bench.NewChannel("input"))
 	}
 
 	if len(p.Filters) == 0 {
@@ -289,19 +309,41 @@ func (p *Pipeline) Run() (err error) {
 
 			options["THREAD"] = strconv.Itoa(j)
 
-			go output.ReadFrom(p.OutputStream, options)
+			go output.ReadFrom(p.OutputStream, options, p.Bench.NewChannel("output"))
 			p.log.Printf("Waiting for %d seconds before next activation", p.OutputSplay)
 			time.Sleep(time.Duration(p.OutputSplay) * time.Second)
 		}
 	}
+	go p.Bench.Process()
 
 	p.log.Printf("Starting stat check, duration: %d", p.StatInterval)
+
 	for {
 		time.Sleep(time.Duration(p.StatInterval) * time.Second)
-
-		p.log.Printf("Input queue: %d, Output queue: %d", len(p.InputStream), len(p.OutputStream))
-		for i, channel := range p.SubChains {
-			p.log.Printf("Sub-channel %s (%d) size is %d", p.SubChainsNames[i], i, len(channel))
-		}
+		p.Status = p.GetStatus()
 	}
+}
+
+func (p *Pipeline) GetStatus() PipelineStatus {
+	currentStatus := PipelineStatus{}
+	currentStatus.In = PluginStatus{
+		Name:      "input",
+		Size:      len(p.InputStream),
+		Benchmark: p.Bench.GetPluginBenchmark("input"),
+	}
+
+	currentStatus.Out = PluginStatus{
+		Name:      "output",
+		Size:      len(p.OutputStream),
+		Benchmark: p.Bench.GetPluginBenchmark("output"),
+	}
+
+	var filterStatuses []PluginStatus
+
+	for i, channel := range p.SubChains {
+		filterStatuses = append(filterStatuses, PluginStatus{Name: "filter-" + p.SubChainsNames[i], Size: len(channel)})
+	}
+
+	currentStatus.Filters = filterStatuses
+	return currentStatus
 }
