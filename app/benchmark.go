@@ -100,6 +100,7 @@ func (bm *Benchmark) Process() {
 				currentCounter.RPS = math.Floor(valueDiff / timeDiff)
 				currentCounter.NextRpsValue = currentCounter.Processed + defaultBenchmarkCounterThreshold
 				currentCounter.LastRpsActivation = now
+				currentCounter.LastRpsValue = currentCounter.Processed
 			}
 
 			bm.UpdateMutex.Lock()

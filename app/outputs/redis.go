@@ -103,6 +103,9 @@ messageCycle:
 
 				if cmdResult.Err() == nil {
 					o.log.Printf("Inserted data to redis. Size: %d. Try: %d", o.Batch, retry)
+
+					counter <- o.Batch
+
 					continue messageCycle
 				}
 
