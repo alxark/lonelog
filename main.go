@@ -5,6 +5,11 @@ import (
 	"log"
 	"os"
 	"flag"
+	"fmt"
+)
+
+const (
+	defaultHttpPort = 8080
 )
 
 func main() {
@@ -34,6 +39,13 @@ func main() {
 		go pipelines[i].Run()
 	}
 
-	logger.Print("Starting HTTP API")
-	httpApi.Serve(":40000")
+	var port int
+	if cfg.Global.HttpPort > 0 {
+		port = cfg.Global.HttpPort
+	} else {
+		port = defaultHttpPort
+	}
+	listen := fmt.Sprintf(":%d", port)
+	logger.Print("Starting HTTP API on " + listen)
+	httpApi.Serve(listen)
 }

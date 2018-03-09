@@ -10,6 +10,7 @@ import (
 type GlobalConfiguration struct {
 	OutputSplay  int `hcl:"output_splay"`
 	StatInterval int `hcl:"stat_interval"`
+	HttpPort int `hcl:"http_port"`
 }
 
 type InConfiguration struct {
