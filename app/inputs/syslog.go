@@ -8,19 +8,20 @@ import (
 	"github.com/alxark/lonelog/structs"
 	"fmt"
 	"time"
-	"math"
 )
 
 type Syslog struct {
 	structs.Input
-	log   log.Logger
-	Ip    string
+	log       log.Logger
+	Ip        string
 	QueueSize int
-	Port  int
+	Port      int
 }
 
 const (
-	statDumpInterval = 1000
+	syslogStatDumpInterval = 1000
+	syslogDefaultQueueSize = 8192
+	syslogDefaultPort      = 514
 )
 
 func NewSyslog(options map[string]string, logger log.Logger) (s *Syslog, err error) {
@@ -39,12 +40,12 @@ func NewSyslog(options map[string]string, logger log.Logger) (s *Syslog, err err
 		}
 		s.QueueSize = queueSizeReal
 	} else {
-		s.QueueSize = 8192
+		s.QueueSize = syslogDefaultQueueSize
 	}
 
 	if _, ok := options["port"]; !ok {
 		logger.Printf("No listen port specified, using default: 514")
-		s.Port = 514
+		s.Port = syslogDefaultPort
 	} else {
 		s.Port, err = strconv.Atoi(options["port"])
 		if err != nil {
@@ -86,7 +87,7 @@ func (s *Syslog) AcceptTo(output chan structs.Message, counter chan int) (err er
 			continue
 		}
 
-		if i >= statDumpInterval {
+		if i >= syslogStatDumpInterval {
 			counter <- i
 			i = 0
 		}
