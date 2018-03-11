@@ -12,7 +12,9 @@ type TimeFormatFilter struct {
 
 	SourceFormat string
 	TargetFormat string
-	OnError      string
+	Timezone     *time.Location
+
+	OnError string
 
 	log log.Logger
 }
@@ -30,6 +32,17 @@ func NewTimeFormatFilter(options map[string]string, logger log.Logger) (t *TimeF
 		t.TargetFormat = targetFormat
 	} else {
 		return nil, errors.New("no target format")
+	}
+
+	if timezone, ok := options["timezone"]; ok {
+		location, err := time.LoadLocation(timezone)
+		if err != nil {
+			return nil, err
+		}
+
+		t.Timezone = location
+	} else {
+		t.Timezone, _ = time.LoadLocation("")
 	}
 
 	t.log = logger
@@ -56,6 +69,8 @@ func (t *TimeFormatFilter) Proceed(input chan structs.Message, output chan struc
 				date = time.Now()
 			}
 		}
+
+		date = date.In(t.Timezone)
 
 		payload := msg.Payload
 		payload[t.Field] = date.Format(t.TargetFormat)
