@@ -71,8 +71,6 @@ func (f *RegexpMatchFilter) Proceed(input chan structs.Message, output chan stru
 			payload[f.TargetField] = f.TargetValue
 
 			msg.Payload = payload
-
-			// f.log.Printf("string %s matched", msg.Payload[f.Field])
 		}
 
 		output <- msg

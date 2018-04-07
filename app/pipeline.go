@@ -151,6 +151,9 @@ func (p *Pipeline) setupFilters(filtersList []FilterPlugin) (err error) {
 		case "regexp_remove":
 			filterPlugin, err = filters.NewRegexpRemoveFilter(v.Options, p.log)
 			break
+		case "regexp_classify":
+			filterPlugin, err = filters.NewRegexpClassifyFilter(v.Options, p.log)
+			break
 		case "regexp_match":
 			filterPlugin, err = filters.NewRegexpMatchFilter(v.Options, p.log)
 			break
@@ -238,6 +241,9 @@ func (p *Pipeline) setupOutput(outputsList []OutputPlugin) (err error) {
 			break
 		case "redis":
 			outputPlugin, err = outputs.NewRedisOutput(v.Options, p.log)
+			break
+		case "null":
+			outputPlugin, err = outputs.NewNullOutput(v.Options, p.log)
 			break
 		default:
 			return errors.New("failed to initialize output: " + v.Plugin)

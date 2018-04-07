@@ -30,6 +30,7 @@ type RedisInput struct {
 	Key       string
 	Batch     int
 	FetchMode int
+	Trim      bool
 }
 
 type Connections struct {
@@ -61,6 +62,12 @@ func NewRedisInput(options map[string]string, logger log.Logger) (o *RedisInput,
 		}
 	} else {
 		o.FetchMode = fetchModePop
+	}
+
+	if trimOrig, ok := options["trim"]; ok {
+		o.Trim = trimOrig == "0" || trimOrig == "no" || trimOrig == "false"
+	} else {
+		o.Trim = true
 	}
 
 	if batchOrig, ok := options["batch"]; ok {
@@ -113,7 +120,7 @@ func (o *RedisInput) AcceptTo(output chan structs.Message, counter chan int) (er
 }
 
 func (o *RedisInput) ProcessRangeTrim(output chan structs.Message, counter chan int) (err error) {
-	o.log.Print("Started redis reader. Fetch mode LRANGE-LTRIM. Batch: %d", o.Batch)
+	o.log.Print("Started redis reader. Fetch mode LRANGE-LTRIM. Batch: %d, trim: %b", o.Batch, o.Trim)
 	client, err := o.GetRedisConnection()
 
 	for {
@@ -134,10 +141,12 @@ func (o *RedisInput) ProcessRangeTrim(output chan structs.Message, counter chan 
 			continue
 		}
 
-		cmdRes := client.LTrim(o.Key, int64(len(items)), -1)
-		if cmdRes.Err() != nil {
-			o.log.Print("failed to run LTRIM command. Got: " + cmdRes.Err().Error())
-			continue
+		if o.Trim {
+			cmdRes := client.LTrim(o.Key, int64(len(items)), -1)
+			if cmdRes.Err() != nil {
+				o.log.Print("failed to run LTRIM command. Got: " + cmdRes.Err().Error())
+				continue
+			}
 		}
 
 		if len(items) == 0 {
