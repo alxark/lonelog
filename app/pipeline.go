@@ -17,7 +17,7 @@ const (
 
 	// how oftern plugins should do their internal service procedures (stat calculation,
 	// data optimization and other such stuff)
-	defaultServiceInterval = 8192
+	defaultServiceInterval = 65535
 
 	// default offset between output service start. splay is used to separate
 	// launch of different threads and prevent too many write operations in one moment

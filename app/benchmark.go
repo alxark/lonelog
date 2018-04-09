@@ -10,6 +10,7 @@ import (
 const (
 	defaultBenchmarkChannelSize      = 8192
 	defaultBenchmarkCounterThreshold = 100000
+	defaultBenchmarkSleepTimeMs               = 100
 )
 
 type Benchmark struct {
@@ -76,9 +77,10 @@ func (bm *Benchmark) Process() {
 	// time diff between last RPS calculation and current time
 	var timeDiff float64
 	var now time.Time
+	cycleProcessed := 0
 
 	for {
-
+		cycleProcessed = 0
 		for channelName, channel := range bm.Channels {
 			unprocessed := len(channel)
 			if unprocessed == 0 {
@@ -89,6 +91,7 @@ func (bm *Benchmark) Process() {
 			for i := 0; i < unprocessed; i += 1 {
 				counter := <-channel
 				currentCounter.Processed += counter
+				cycleProcessed += 1
 			}
 
 			// we need to calculate RPS now
@@ -106,6 +109,10 @@ func (bm *Benchmark) Process() {
 			bm.UpdateMutex.Lock()
 			bm.Counters[channelName] = currentCounter
 			bm.UpdateMutex.Unlock()
+		}
+
+		if cycleProcessed == 0 {
+			time.Sleep(defaultBenchmarkSleepTimeMs * time.Millisecond)
 		}
 	}
 }
