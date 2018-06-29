@@ -175,6 +175,9 @@ func (p *Pipeline) setupFilters(filtersList []FilterPlugin) (err error) {
 		case "copy":
 			filterPlugin, err = filters.NewCopyFilter(v.Options, p.log)
 			break
+		case "tcp_tee":
+			filterPlugin, err = filters.NewTcpTeeFilter(v.Options, p.log)
+			break
 		default:
 			return errors.New(fmt.Sprintf("plugin #%d not found: %s", i, v.Plugin))
 		}

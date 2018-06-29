@@ -10,7 +10,8 @@ import (
 const (
 	defaultBenchmarkChannelSize      = 8192
 	defaultBenchmarkCounterThreshold = 100000
-	defaultBenchmarkSleepTimeMs               = 100
+	defaultBenchmarkSleepTimeMs      = 100
+	defaultBenchmarkCycleMinimum     = 1024
 )
 
 type Benchmark struct {
@@ -111,7 +112,9 @@ func (bm *Benchmark) Process() {
 			bm.UpdateMutex.Unlock()
 		}
 
-		if cycleProcessed == 0 {
+		// slow down benchmark processing if we receive less than this amount of elements
+		// this is needed to prevent resource over-usage
+		if cycleProcessed < defaultBenchmarkCycleMinimum {
 			time.Sleep(defaultBenchmarkSleepTimeMs * time.Millisecond)
 		}
 	}

@@ -14,6 +14,10 @@ func (bf *BasicFilter) SetDebug(debug bool) {
 	bf.Debug = debug
 }
 
+func (bf *BasicFilter) IsThreadSafe() bool {
+	return true
+}
+
 /**
  * Set filter base name
  */

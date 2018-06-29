@@ -120,6 +120,7 @@ func (c *ClickhouseOutput) ReadFrom(input chan structs.Message,  runtimeOptions 
 	c.log.Print("Using query: " + query)
 
 	i := 0
+	runningErrors := 0
 
 	var tx *sql.Tx
 	var stmt *sql.Stmt
@@ -151,11 +152,13 @@ func (c *ClickhouseOutput) ReadFrom(input chan structs.Message,  runtimeOptions 
 		}
 
 		if _, err := stmt.Exec(arguments...); err != nil {
-			c.log.Print("failed to proceed row: %s, got: %s", arguments, err.Error())
+			c.log.Printf("failed to proceed row: %s, got: %s", arguments, err.Error())
+			runningErrors += 1
 			continue
 		}
 
 		i += 1
+		runningErrors = 0
 
 		if i % 100 == 0 {
 			currentTime = time.Now().Unix()
