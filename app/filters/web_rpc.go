@@ -1,0 +1,198 @@
+package filters
+
+import (
+	"log"
+	"errors"
+	"github.com/alxark/lonelog/structs"
+	"strings"
+	"strconv"
+	"sync"
+	"net/http"
+	"io/ioutil"
+	"net/url"
+	"crypto/sha256"
+	"encoding/json"
+	"time"
+	"encoding/base64"
+)
+
+type RpcReply struct {
+	Status     bool
+	ReadTime   time.Time
+	CreateTime time.Time
+	Fields     map[string]string
+}
+
+type WebRpcFilter struct {
+	BasicFilter
+
+	Url    string
+	Fields []string
+	Size   int
+	Cache  map[string]RpcReply
+	Mutex  sync.RWMutex
+
+	log log.Logger
+}
+
+func NewWebRpcFilter(options map[string]string, logger log.Logger) (f *WebRpcFilter, err error) {
+	f = &WebRpcFilter{}
+
+	if _, ok := options["url"]; !ok {
+		return f, errors.New("no RPC url provided")
+	}
+
+	f.Url = options["url"]
+	if _, ok := options["fields"]; !ok {
+		return f, errors.New("no fields specified")
+	}
+
+	if _, ok := options["size"]; ok {
+		f.Size, err = strconv.Atoi(options["size"])
+		if err != nil {
+			f.Size = 2048
+		}
+	} else {
+		f.Size = 2048
+	}
+
+	f.Fields = strings.Split(options["fields"], ",")
+	f.Mutex = sync.RWMutex{}
+
+	f.log = logger
+
+	return f, nil
+}
+
+/**
+ * Split content field by delimiter
+ */
+func (f *WebRpcFilter) Proceed(input chan structs.Message, output chan structs.Message) (err error) {
+	f.Cache = make(map[string]RpcReply)
+
+	i := 0
+	for msg := range input {
+		if i == f.ServiceInterval {
+			f.log.Printf("Doing service works. Total cache size: %d", len(f.Cache))
+			i = 0
+
+			f.Mutex.Lock()
+			var removeList []string
+			for keyName, value := range f.Cache {
+				if value.CreateTime.Unix() < time.Now().Unix()-3600 {
+					removeList = append(removeList, keyName)
+				}
+			}
+
+			f.log.Printf("Total items for removal: %d", len(removeList))
+			for _, keyName := range removeList {
+				delete(f.Cache, keyName)
+			}
+			f.log.Printf("Total items after cleanup: %d", len(f.Cache))
+			f.Mutex.Unlock()
+		}
+
+		i += 1
+
+		msgHash, err := f.HashKey(msg.Payload)
+
+		if err != nil {
+			output <- msg
+			f.log.Printf("[ERROR] Failed to generate hash: %s", err.Error())
+			continue
+		}
+
+		var updateData map[string]string
+
+		f.Mutex.RLock()
+		if cachedData, ok := f.Cache[msgHash]; ok {
+			updateData = cachedData.Fields
+			f.Mutex.RUnlock()
+		} else {
+			f.Mutex.RUnlock()
+
+			result, err := f.Call(msg.Payload)
+			if err != nil {
+				f.log.Printf("failed for load information from RPC: %s", err.Error())
+				output <- msg
+				continue
+			}
+
+			result.Status = true
+			result.CreateTime = time.Now()
+
+			f.Mutex.Lock()
+			f.Cache[msgHash] = result
+			f.log.Printf("Added new cached item: %d", len(f.Cache))
+			f.Mutex.Unlock()
+
+			updateData = result.Fields
+		}
+
+		for key, value := range updateData {
+			payload := msg.Payload
+			payload[key] = value
+			msg.Payload = payload
+		}
+		output <- msg
+	}
+
+	return
+}
+
+func (f *WebRpcFilter) HashKey(data map[string]string) (result string, err error) {
+	hashedData := make(map[string]string)
+	for _, fieldName := range f.Fields {
+		if _, ok := data[fieldName]; ok {
+			hashedData[fieldName] = data[fieldName]
+		} else {
+			hashedData[fieldName] = "-"
+		}
+	}
+
+	jsonData, err := json.Marshal(hashedData)
+	if err != nil {
+		return
+	}
+
+	hashObject := sha256.New()
+	hashObject.Write(jsonData)
+
+	return base64.URLEncoding.EncodeToString(hashObject.Sum(nil)), nil
+}
+
+// call to remote RPC
+func (f *WebRpcFilter) Call(payload map[string]string) (reply RpcReply, err error) {
+	data := url.Values{}
+
+	for _, fieldName := range f.Fields {
+		if val, ok := payload[fieldName]; ok {
+			data.Set(fieldName, val)
+		} else {
+			data.Set(fieldName, "-")
+		}
+	}
+
+	client := &http.Client{}
+	r, _ := http.NewRequest("POST", f.Url, strings.NewReader(data.Encode())) // URL-encoded payload
+	r.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	r.Header.Add("Content-Length", strconv.Itoa(len(data.Encode())))
+
+	res, err := client.Do(r)
+	if err != nil {
+		return
+	}
+
+	content, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return
+	}
+
+	var serviceReply map[string]string
+	err = json.Unmarshal(content, &serviceReply)
+	res.Body.Close()
+
+	reply.Fields = serviceReply
+
+	return
+}
