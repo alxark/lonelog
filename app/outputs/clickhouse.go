@@ -148,6 +148,7 @@ func (c *ClickhouseOutput) ReadFrom(input chan structs.Message,  runtimeOptions 
 
 		arguments, err = c.PrepareArguments(msg.Payload)
 		if err != nil {
+			c.log.Printf("failed to proceed row. error: %s", err.Error())
 			continue
 		}
 
