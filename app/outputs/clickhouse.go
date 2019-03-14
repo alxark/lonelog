@@ -56,10 +56,6 @@ func NewClickhouseOutput(options map[string]string, logger log.Logger) (c *Click
 		return nil, errors.New("no table specified")
 	}
 
-	if err = pingDsn(c.Dsn); err != nil {
-		return nil, errors.New("invalid clickhouse dsn: " + err.Error())
-	}
-
 	if batch, ok := options["batch"]; ok {
 		c.Batch, err = strconv.Atoi(batch)
 		if err != nil {
@@ -98,97 +94,110 @@ func pingDsn(dsn string) (err error) {
 	return
 }
 
+func (c *ClickhouseOutput) delay(try int) {
+	time.Sleep(5 * time.Second)
+}
+
+func (c *ClickhouseOutput) flushBuffer(buffer []structs.Message) error {
+	try := 0
+
+	for {
+		try += 1
+		var tx *sql.Tx
+		var stmt *sql.Stmt
+
+		connect, err := sql.Open("clickhouse", c.Dsn)
+		if err != nil {
+			c.log.Printf("try %d, failed to connect with server: %s", try, err.Error())
+			c.delay(try)
+			continue
+		}
+
+		err = connect.Ping()
+		if err != nil {
+			c.log.Printf("try %d, server is not responding, got: %s", try, err.Error())
+			c.delay(try)
+			continue
+		}
+
+		var placeholders []string
+		for range c.Fields {
+			placeholders = append(placeholders, "?")
+		}
+
+		query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
+			c.Table, strings.Join(c.Fields, ","), strings.Join(placeholders, ","))
+
+		c.log.Print("Using query: " + query)
+
+		var arguments []interface{}
+
+		tx, err = connect.Begin()
+		if err != nil {
+			c.log.Printf("try %d, failed to initialize transaction: %s", try, err.Error())
+			c.delay(try)
+			continue
+		}
+
+		stmt, err = tx.Prepare(query)
+		if err != nil {
+			c.log.Printf("try %d, failed to prepare statement: %s", try, err.Error())
+			c.delay(try)
+			continue
+		}
+
+		for _, msg := range buffer {
+			arguments, err = c.PrepareArguments(msg.Payload)
+			if err != nil {
+				c.log.Printf("failed to proceed row. error: %s", err.Error())
+				continue
+			}
+
+			if _, err := stmt.Exec(arguments...); err != nil {
+				c.log.Printf("failed to proceed row: %s, got: %s", arguments, err.Error())
+				continue
+			}
+		}
+
+		err = tx.Commit()
+		if err == nil {
+			c.log.Printf("inserted %d rows, try: %d", len(buffer), try)
+			return nil
+		}
+
+		c.log.Printf("failed to commit clickhouse transaction, try: %d, got: %s", try, err.Error())
+		c.delay(try)
+	}
+}
+
+/**
+ * Read data to local buffer and flush it when it's filled or when
+ * time threshold is reached
+ */
 func (c *ClickhouseOutput) ReadFrom(input chan structs.Message,  runtimeOptions map[string]string, counter chan int) (err error) {
-
-	connect, err := sql.Open("clickhouse", c.Dsn)
-	if err != nil {
-		c.log.Fatal(err.Error())
-	}
-	err = connect.Ping()
-	if err != nil {
-		c.log.Fatal(err.Error())
-	}
-
-	var placeholders []string
-	for range c.Fields {
-		placeholders = append(placeholders, "?")
-	}
-
-	query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
-		c.Table, strings.Join(c.Fields, ","), strings.Join(placeholders, ","))
-
-	c.log.Print("Using query: " + query)
-
 	i := 0
-	runningErrors := 0
-
-	var tx *sql.Tx
-	var stmt *sql.Stmt
 
 	lastFill := time.Now().Unix()
 	currentTime := time.Now().Unix()
 
-	var arguments []interface{}
+	buffer := make([]structs.Message, c.Batch)
 
 	for msg := range input {
-		if i == 0 {
-			tx, err = connect.Begin()
-			if err != nil {
-				c.log.Print("failed to initialize transaction: " + err.Error())
-				time.Sleep(5 * time.Second)
-				continue
-			}
-
-			stmt, err = tx.Prepare(query)
-			if err != nil {
-				c.log.Fatal(err.Error())
-			}
-		}
-
-
-		arguments, err = c.PrepareArguments(msg.Payload)
-		if err != nil {
-			c.log.Printf("failed to proceed row. error: %s", err.Error())
-			continue
-		}
-
-		if _, err := stmt.Exec(arguments...); err != nil {
-			c.log.Printf("failed to proceed row: %s, got: %s", arguments, err.Error())
-			runningErrors += 1
-			continue
-		}
-
+		buffer[i] = msg
 		i += 1
-		runningErrors = 0
 
-		if i % 100 == 0 {
+		// time function is too heavy, we don't want to run it on each message
+		if i % 128 == 0 {
 			currentTime = time.Now().Unix()
 		}
 
 		if i >= c.Batch || currentTime - c.Threshold > lastFill {
 			currentTime = time.Now().Unix()
 			diff := currentTime - lastFill
+
 			c.log.Printf("Batch filled in %d seconds. Inserting %d items to database", diff, i)
 			lastFill = currentTime
-
-			err = tx.Commit()
-			if err != nil {
-				c.log.Printf("failed to complete transaction: %s", err.Error())
-
-				tx, err = connect.Begin()
-				if err != nil {
-					c.log.Print("failed to initialize transaction: " + err.Error())
-					time.Sleep(5 * time.Second)
-					continue
-				}
-
-				stmt, err = tx.Prepare(query)
-				if err != nil {
-					c.log.Fatal(err.Error())
-				}
-
-				continue
-			}
+			c.flushBuffer(buffer[:i])
 
 			counter <- i
 
