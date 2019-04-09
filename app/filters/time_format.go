@@ -22,6 +22,7 @@ type TimeFormatFilter struct {
 
 func NewTimeFormatFilter(options map[string]string, logger log.Logger) (t *TimeFormatFilter, err error) {
 	t = &TimeFormatFilter{}
+	t.log = logger
 
 	if sourceFormat, ok := options["source_format"]; ok {
 		t.SourceFormat = sourceFormat
@@ -52,7 +53,6 @@ func NewTimeFormatFilter(options map[string]string, logger log.Logger) (t *TimeF
 		t.Timezone, _ = time.LoadLocation("")
 	}
 
-	t.log = logger
 	t.OnError = "current_time"
 
 	return t, nil
@@ -62,7 +62,11 @@ func NewTimeFormatFilter(options map[string]string, logger log.Logger) (t *TimeF
  * Split content field by delimiter
  */
 func (t *TimeFormatFilter) Proceed(input chan structs.Message, output chan structs.Message) (err error) {
-	t.log.Printf("Updating time format on %s, %s => %s", t.Field, t.SourceFormat, t.TargetFormat)
+	if t.TargetField == "" {
+		t.TargetField = t.Field
+	}
+	
+	t.log.Printf("Converting %s (%s) to %s (%s)", t.SourceFormat, t.Field, t.TargetFormat, t.TargetField)
 
 	for msg := range input {
 		if _, ok := msg.Payload[t.Field]; !ok {
@@ -72,6 +76,10 @@ func (t *TimeFormatFilter) Proceed(input chan structs.Message, output chan struc
 
 		date, err := time.Parse(t.SourceFormat, msg.Payload[t.Field])
 		if err != nil {
+			if t.Debug {
+				t.log.Print("Incorrect datetime: " + msg.Payload[t.Field] + ", error: " + err.Error())
+			}
+
 			if t.OnError == "current_time" {
 				date = time.Now()
 			}
@@ -81,6 +89,10 @@ func (t *TimeFormatFilter) Proceed(input chan structs.Message, output chan struc
 
 		payload := msg.Payload
 		payload[t.TargetField] = date.Format(t.TargetFormat)
+		if t.Debug {
+			t.log.Printf(t.GetName() + ": Converted time %s (%s) => %s (%s)", msg.Payload[t.Field], t.Field, payload[t.TargetField], t.TargetField)
+		}
+
 		msg.Payload = payload
 
 		output <- msg
