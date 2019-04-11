@@ -16,6 +16,9 @@ import (
 	"encoding/base64"
 )
 
+const OnFailRetry = 1
+const OnFailSkip = 2
+
 type RpcReply struct {
 	Status     bool
 	ReadTime   time.Time
@@ -28,6 +31,7 @@ type WebRpcFilter struct {
 
 	Url    string
 	Fields []string
+	OnFail int
 	Size   int
 	Cache  map[string]RpcReply
 	Mutex  sync.RWMutex
@@ -54,6 +58,18 @@ func NewWebRpcFilter(options map[string]string, logger log.Logger) (f *WebRpcFil
 		}
 	} else {
 		f.Size = 2048
+	}
+
+	if _, ok := options["on_fail"]; ok {
+		if options["on_fail"] == "retry" {
+			f.OnFail = OnFailRetry
+		} else if options["on_fail"] == "skip" {
+			f.OnFail = OnFailSkip
+		} else {
+			return nil, errors.New("unknown on_fail mode: " + options["on_fail"] + ", should be skip or retry")
+		}
+	} else {
+		f.OnFail = OnFailRetry
 	}
 
 	f.Fields = strings.Split(options["fields"], ",")
@@ -112,10 +128,30 @@ func (f *WebRpcFilter) Proceed(input chan structs.Message, output chan structs.M
 			f.Mutex.RUnlock()
 
 			result, err := f.Call(msg.Payload)
+
 			if err != nil {
-				f.log.Printf("failed for load information from RPC: %s", err.Error())
-				output <- msg
-				continue
+				if f.OnFail == OnFailSkip {
+					f.log.Printf("failed for load information from RPC: %s", err.Error())
+					output <- msg
+					continue
+					// oh shit, we need to retry and wait for result
+				} else if f.OnFail == OnFailRetry {
+					f.log.Printf(f.GetName()+": failed for load information from RPC: %s, starting retry process", err.Error())
+
+					i := 0
+					for {
+						i ++
+						result, err = f.Call(msg.Payload)
+						if err != nil {
+							time.Sleep(time.Duration(i) * time.Second)
+							f.log.Printf(f.GetName()+": request error, retry %d, got: %s", i, err.Error())
+							continue
+						}
+
+						f.log.Printf("got RPC result after %d retries", i)
+						break
+					}
+				}
 			}
 
 			result.Status = true
