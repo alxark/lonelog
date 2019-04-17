@@ -142,7 +142,8 @@ messageCycle:
 				gz.Close()
 
 				if o.Debug {
-					o.log.Printf("data compressed %d => %d", len(encodedData), buf.Len())
+					compression := 100.0 * float64(buf.Len()) / float64(len(encodedData))
+					o.log.Printf("data compressed %d => %d, compression %0.2f%%", len(encodedData), buf.Len(), compression)
 				}
 
 				cache[cachePos] = buf.Bytes()
