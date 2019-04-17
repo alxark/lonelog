@@ -168,25 +168,32 @@ func (o *RedisInput) ProcessRangeTrim(output chan structs.Message, counter chan 
 		for _, item := range items {
 			if o.Compression {
 				gz, err := gzip.NewReader(bytes.NewBuffer([]byte(item)))
+				gz.Multistream(false)
+
 				if err != nil {
 					o.log.Print("failed to parse gzipped data: "  + err.Error())
 					continue
 				}
 
 				var buf bytes.Buffer
-				io.Copy(&buf, gz)
+				_, err = io.Copy(&buf, gz)
+				if err != nil {
+					o.log.Print("io.Copy error: " + err.Error())
+				}
 
 				var compressedMessages []string
-				err = json.Unmarshal(buf.Bytes(), &compressedMessages)
+				jsonUnpacked := buf.Bytes()
+				err = json.Unmarshal(jsonUnpacked, &compressedMessages)
 				if err != nil {
 					o.log.Print("failed to decode compressed messages: " + err.Error())
+					continue
 				}
 
 				for _, encodedMsg := range compressedMessages {
 					var msg structs.Message
 					err = json.Unmarshal([]byte(encodedMsg), &msg)
 					if err != nil {
-						o.log.Printf("failed to decode compressed message: %s", err.Error())
+						o.log.Printf("failed to decode item: %s", err.Error())
 						continue
 					}
 
