@@ -8,6 +8,8 @@ import (
 )
 
 type StdoutOutput struct {
+	BasicOutput
+
 	Log log.Logger
 }
 

@@ -263,6 +263,11 @@ func (p *Pipeline) setupOutput(outputsList []OutputPlugin) (err error) {
 			threadsCount = v.Threads
 		}
 
+		if v.Debug {
+			outputPlugin.SetDebug(true)
+			p.log.Printf("Activated debug mode for output plugin")
+		}
+
 		p.Outputs = append(p.Outputs, outputPlugin)
 		p.OutputThreadsCount = append(p.OutputThreadsCount, threadsCount)
 	}

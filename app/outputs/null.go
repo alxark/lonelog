@@ -6,6 +6,8 @@ import (
 )
 
 type NullOutput struct {
+	BasicOutput
+
 	Log log.Logger
 }
 

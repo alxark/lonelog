@@ -46,6 +46,7 @@ func NewSplitFilter(options map[string]string, logger log.Logger) (f *SplitFilte
  */
 func (f *SplitFilter) Proceed(input chan structs.Message, output chan structs.Message) (err error) {
 	f.log.Printf("Split filter activated. Delimiter: %s, Prefix: %s, Field: %s", f.Delimiter, f.Prefix, f.Field)
+
 	for msg := range input {
 		if fieldData, ok := msg.Payload[f.Field]; ok {
 			splitData := strings.Split(fieldData, f.Delimiter)

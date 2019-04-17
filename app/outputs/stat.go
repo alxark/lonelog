@@ -10,6 +10,8 @@ import (
 const DEFAULT_PERIOD = 10
 
 type StatOutput struct {
+	BasicOutput
+
 	log log.Logger
 	Period int64
 }

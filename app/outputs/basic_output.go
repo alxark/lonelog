@@ -6,7 +6,7 @@ import (
 )
 
 type BasicOutput struct {
-
+	Debug bool
 }
 
 func (bo *BasicOutput) PrepareStringVariable(template string, variables map[string]string) (res string) {
@@ -25,4 +25,8 @@ func (bo *BasicOutput) PrepareStringVariable(template string, variables map[stri
 	}
 
 	return res
+}
+
+func (bo *BasicOutput) SetDebug(debug bool) {
+	bo.Debug = debug
 }

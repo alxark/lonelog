@@ -22,5 +22,6 @@ type FilterPlugin struct {
 type OutputPlugin struct {
 	Plugin  string
 	Threads int
+	Debug   bool
 	Options map[string]string
 }

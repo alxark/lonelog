@@ -10,6 +10,9 @@ import (
 	"time"
 	"encoding/json"
 	"strconv"
+	"bytes"
+	"compress/gzip"
+	"io"
 )
 
 const DEFAULTKEY = "logs"
@@ -31,6 +34,7 @@ type RedisInput struct {
 	Batch     int
 	FetchMode int
 	Trim      bool
+	Compression bool
 }
 
 type Connections struct {
@@ -78,6 +82,12 @@ func NewRedisInput(options map[string]string, logger log.Logger) (o *RedisInput,
 		o.Batch = batch
 	} else {
 		o.Batch = defaultBatchSize
+	}
+
+	if compression, ok := options["compression"]; ok {
+		o.Compression = o.IsActive(compression)
+	} else {
+		o.Compression = false
 	}
 
 	for _, v := range strings.Split(options["servers"], ",") {
@@ -156,17 +166,46 @@ func (o *RedisInput) ProcessRangeTrim(output chan structs.Message, counter chan 
 
 		chunkProcessed := 0
 		for _, item := range items {
-			msg := structs.Message{}
-			err = json.Unmarshal([]byte(item), &msg)
+			if o.Compression {
+				gz, err := gzip.NewReader(bytes.NewBuffer([]byte(item)))
+				if err != nil {
+					o.log.Print("failed to parse gzipped data: "  + err.Error())
+					continue
+				}
 
-			if err != nil {
-				o.log.Print("failed to decode message: " + err.Error())
-				continue
+				var buf bytes.Buffer
+				io.Copy(&buf, gz)
+
+				var compressedMessages []string
+				err = json.Unmarshal(buf.Bytes(), &compressedMessages)
+				if err != nil {
+					o.log.Print("failed to decode compressed messages: " + err.Error())
+				}
+
+				for _, encodedMsg := range compressedMessages {
+					var msg structs.Message
+					err = json.Unmarshal([]byte(encodedMsg), &msg)
+					if err != nil {
+						o.log.Printf("failed to decode compressed message: %s", err.Error())
+						continue
+					}
+
+					chunkProcessed += 1
+					output <- msg
+				}
+			} else {
+				msg := structs.Message{}
+				err = json.Unmarshal([]byte(item), &msg)
+
+				if err != nil {
+					o.log.Print("failed to decode message: " + err.Error())
+					continue
+				}
+
+				chunkProcessed += 1
+
+				output <- msg
 			}
-
-			chunkProcessed += 1
-
-			output <- msg
 		}
 
 		counter <- chunkProcessed

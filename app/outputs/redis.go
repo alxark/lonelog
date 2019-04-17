@@ -9,11 +9,13 @@ import (
 	"errors"
 	"strings"
 	"time"
+	"bytes"
+	"compress/gzip"
 )
 
 const (
 	redisDefaultBatchSize = 1000
-	redisDefaultKey = "logs"
+	redisDefaultKey       = "logs"
 )
 
 type RedisOutput struct {
@@ -21,10 +23,11 @@ type RedisOutput struct {
 
 	log log.Logger
 
-	OutputMode string // available modes - sharding or replica
-	Outputs    []Connections
-	Key        string
-	Batch      int
+	OutputMode    string // available modes - sharding or replica
+	Outputs       []Connections
+	Key           string
+	Batch         int
+	CompressBatch int
 }
 
 type Connections struct {
@@ -56,6 +59,17 @@ func NewRedisOutput(options map[string]string, logger log.Logger) (o *RedisOutpu
 		o.Key = redisDefaultKey
 	}
 
+	if compressBatch, ok := options["compress_batch"]; ok {
+		o.CompressBatch, err = strconv.Atoi(compressBatch)
+		if err != nil {
+			return nil, errors.New("incorrect compress_batch value: " + compressBatch)
+		}
+
+		o.log.Printf("Initialized compress batch: %s", compressBatch)
+	} else {
+		o.CompressBatch = 0
+	}
+
 	for _, v := range strings.Split(options["servers"], ",") {
 		c := Connections{Addr: v}
 		o.Outputs = append(o.Outputs, c)
@@ -68,9 +82,15 @@ func NewRedisOutput(options map[string]string, logger log.Logger) (o *RedisOutpu
 func (o *RedisOutput) ReadFrom(input chan structs.Message, runtimeOptions map[string]string, counter chan int) (err error) {
 	keyName := o.PrepareStringVariable(o.Key, runtimeOptions)
 
-	o.log.Printf("Started redis output, batch: %d, output to %s", o.Batch, keyName)
+	o.log.Printf("Started redis output, batch: %d, output to %s, compress batch: %d", o.Batch, keyName, o.CompressBatch)
 
 	cache := make([]interface{}, o.Batch)
+	var compressCache []string
+	var buf bytes.Buffer
+
+	if o.CompressBatch > 0 {
+		compressCache = make([]string, o.CompressBatch)
+	}
 
 	client := redis.NewClient(&redis.Options{
 		Addr:     o.Outputs[0].Addr,
@@ -84,17 +104,55 @@ func (o *RedisOutput) ReadFrom(input chan structs.Message, runtimeOptions map[st
 	}
 
 	cachePos := 0
+	compressPos := 0
 
 messageCycle:
 	for msg := range input {
 		info, err := json.Marshal(msg)
 		if err != nil {
-			o.log.Print("Failed to encode to JSON")
+			o.log.Print("failed to encode to JSON: " + err.Error())
 			continue
 		}
 
-		cache[cachePos] = info
-		cachePos += 1
+		if o.CompressBatch > 0 {
+			compressCache[compressPos] = string(info)
+			compressPos += 1
+
+
+			if compressPos == o.CompressBatch {
+				compressPos = 0
+
+				encodedData, err := json.Marshal(compressCache)
+				if err != nil {
+					o.log.Printf("failed to encode compress data: " + err.Error())
+
+					compressCache = make([]string, o.CompressBatch)
+					continue
+				}
+
+				buf.Truncate(0)
+				gz, _ := gzip.NewWriterLevel(&buf, gzip.BestCompression)
+
+				_, err = gz.Write(encodedData)
+				if err != nil {
+					o.log.Printf("failed to compress: " + err.Error())
+					compressCache = make([]string, o.CompressBatch)
+				}
+				gz.Flush()
+				gz.Close()
+
+				if o.Debug {
+					o.log.Printf("data compressed %d => %d", len(encodedData), buf.Len())
+				}
+
+				cache[cachePos] = buf.Bytes()
+				cachePos += 1
+			}
+		} else {
+			cache[cachePos] = info
+			cachePos += 1
+		}
+
 		if cachePos == o.Batch {
 			cachePos = 0
 

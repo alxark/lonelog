@@ -15,6 +15,8 @@ import (
 const ClickhouseTimeThreshold = 60
 
 type ClickhouseOutput struct {
+	BasicOutput
+
 	log log.Logger
 
 	Fields      []string
