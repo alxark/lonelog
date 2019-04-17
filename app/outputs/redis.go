@@ -86,7 +86,6 @@ func (o *RedisOutput) ReadFrom(input chan structs.Message, runtimeOptions map[st
 
 	cache := make([]interface{}, o.Batch)
 	var compressCache []string
-	var buf bytes.Buffer
 
 	if o.CompressBatch > 0 {
 		compressCache = make([]string, o.CompressBatch)
@@ -130,7 +129,7 @@ messageCycle:
 					continue
 				}
 
-				buf.Truncate(0)
+				var buf bytes.Buffer
 				gz, _ := gzip.NewWriterLevel(&buf, gzip.BestCompression)
 
 				_, err = gz.Write(encodedData)
