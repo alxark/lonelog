@@ -100,75 +100,85 @@ func (c *ClickhouseOutput) delay(try int) {
 	time.Sleep(5 * time.Second)
 }
 
+func (c *ClickhouseOutput) flushBufferTry(buffer []structs.Message, try int) error {
+	var tx *sql.Tx
+	var stmt *sql.Stmt
+
+	connect, err := sql.Open("clickhouse", c.Dsn)
+	defer connect.Close()
+
+	if err != nil {
+		c.log.Printf("try %d, failed to connect with server: %s", try, err.Error())
+		return err
+	}
+
+	err = connect.Ping()
+	if err != nil {
+		c.log.Printf("try %d, server is not responding, got: %s", try, err.Error())
+		return err
+	}
+
+	var placeholders []string
+	for range c.Fields {
+		placeholders = append(placeholders, "?")
+	}
+
+	query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
+		c.Table, strings.Join(c.Fields, ","), strings.Join(placeholders, ","))
+
+	c.log.Print("Using query: " + query)
+
+	var arguments []interface{}
+
+	tx, err = connect.Begin()
+	if err != nil {
+		c.log.Printf("try %d, failed to initialize transaction: %s", try, err.Error())
+		return err
+	}
+
+	stmt, err = tx.Prepare(query)
+	if err != nil {
+		c.log.Printf("try %d, failed to prepare statement: %s", try, err.Error())
+		return err
+	}
+
+	for _, msg := range buffer {
+		arguments, err = c.PrepareArguments(msg.Payload)
+		if err != nil {
+			c.log.Printf("failed to proceed row. error: %s", err.Error())
+			continue
+		}
+
+		if _, err := stmt.Exec(arguments...); err != nil {
+			c.log.Printf("failed to proceed row: %s, got: %s", arguments, err.Error())
+			continue
+		}
+	}
+
+	err = tx.Commit()
+	if err == nil {
+		c.log.Printf("inserted %d rows, try: %d", len(buffer), try)
+		return nil
+	}
+
+	c.log.Printf("failed to commit clickhouse transaction, try: %d, got: %s", try, err.Error())
+	return err
+}
+
 func (c *ClickhouseOutput) flushBuffer(buffer []structs.Message) error {
 	try := 0
 
 	for {
 		try += 1
-		var tx *sql.Tx
-		var stmt *sql.Stmt
 
-		connect, err := sql.Open("clickhouse", c.Dsn)
+		err := c.flushBufferTry(buffer, try)
 		if err != nil {
-			c.log.Printf("try %d, failed to connect with server: %s", try, err.Error())
+			c.log.Print("failed to flush buffer: " + err.Error())
 			c.delay(try)
 			continue
 		}
 
-		err = connect.Ping()
-		if err != nil {
-			c.log.Printf("try %d, server is not responding, got: %s", try, err.Error())
-			c.delay(try)
-			continue
-		}
-
-		var placeholders []string
-		for range c.Fields {
-			placeholders = append(placeholders, "?")
-		}
-
-		query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
-			c.Table, strings.Join(c.Fields, ","), strings.Join(placeholders, ","))
-
-		c.log.Print("Using query: " + query)
-
-		var arguments []interface{}
-
-		tx, err = connect.Begin()
-		if err != nil {
-			c.log.Printf("try %d, failed to initialize transaction: %s", try, err.Error())
-			c.delay(try)
-			continue
-		}
-
-		stmt, err = tx.Prepare(query)
-		if err != nil {
-			c.log.Printf("try %d, failed to prepare statement: %s", try, err.Error())
-			c.delay(try)
-			continue
-		}
-
-		for _, msg := range buffer {
-			arguments, err = c.PrepareArguments(msg.Payload)
-			if err != nil {
-				c.log.Printf("failed to proceed row. error: %s", err.Error())
-				continue
-			}
-
-			if _, err := stmt.Exec(arguments...); err != nil {
-				c.log.Printf("failed to proceed row: %s, got: %s", arguments, err.Error())
-				continue
-			}
-		}
-
-		err = tx.Commit()
-		if err == nil {
-			c.log.Printf("inserted %d rows, try: %d", len(buffer), try)
-			return nil
-		}
-
-		c.log.Printf("failed to commit clickhouse transaction, try: %d, got: %s", try, err.Error())
-		c.delay(try)
+		return nil
 	}
 }
 
