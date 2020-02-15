@@ -2,7 +2,7 @@ package filters
 
 import (
 	"log"
-	"github.com/alxark/lonelog/structs"
+	"github.com/alxark/lonelog/internal/structs"
 	"github.com/hashicorp/hcl"
 	"regexp"
 	"io/ioutil"

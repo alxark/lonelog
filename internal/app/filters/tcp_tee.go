@@ -2,7 +2,7 @@ package filters
 
 import (
 	"log"
-	"github.com/alxark/lonelog/structs"
+	"github.com/alxark/lonelog/internal/structs"
 	"net"
 	"encoding/json"
 	"strconv"

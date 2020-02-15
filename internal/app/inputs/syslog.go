@@ -5,7 +5,7 @@ import (
 	"log"
 	"strconv"
 	"errors"
-	"github.com/alxark/lonelog/structs"
+	"github.com/alxark/lonelog/internal/structs"
 	"fmt"
 	"time"
 )

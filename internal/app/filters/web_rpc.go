@@ -3,7 +3,7 @@ package filters
 import (
 	"log"
 	"errors"
-	"github.com/alxark/lonelog/structs"
+	"github.com/alxark/lonelog/internal/structs"
 	"strings"
 	"strconv"
 	"sync"

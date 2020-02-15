@@ -1,11 +1,11 @@
 package main
 
 import (
-	"github.com/alxark/lonelog/app"
-	"log"
-	"os"
 	"flag"
 	"fmt"
+	"github.com/alxark/lonelog/internal/app"
+	"log"
+	"os"
 )
 
 const (

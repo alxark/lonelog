@@ -3,7 +3,7 @@ package inputs
 import (
 	"github.com/go-redis/redis"
 	"log"
-	"github.com/alxark/lonelog/structs"
+	"github.com/alxark/lonelog/internal/structs"
 	//"encoding/json"
 	"errors"
 	"strings"

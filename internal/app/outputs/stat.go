@@ -2,7 +2,7 @@ package outputs
 
 import (
 	"log"
-	"github.com/alxark/lonelog/structs"
+	"github.com/alxark/lonelog/internal/structs"
 	"time"
 	"strconv"
 )

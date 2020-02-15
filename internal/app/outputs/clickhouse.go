@@ -2,9 +2,9 @@ package outputs
 
 import (
 	"database/sql"
-	_ "github.com/kshvakov/clickhouse"
+	_ "github.com/ClickHouse/clickhouse-go"
 	"log"
-	"github.com/alxark/lonelog/structs"
+	"github.com/alxark/lonelog/internal/structs"
 	"time"
 	"strings"
 	"errors"

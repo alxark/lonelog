@@ -3,10 +3,10 @@ package app
 import (
 	"log"
 	"time"
-	"github.com/alxark/lonelog/app/inputs"
-	"github.com/alxark/lonelog/app/outputs"
-	"github.com/alxark/lonelog/app/filters"
-	"github.com/alxark/lonelog/structs"
+	"github.com/alxark/lonelog/internal/app/inputs"
+	"github.com/alxark/lonelog/internal/app/outputs"
+	"github.com/alxark/lonelog/internal/app/filters"
+	"github.com/alxark/lonelog/internal/structs"
 	"errors"
 	"fmt"
 	"strconv"
@@ -141,6 +141,9 @@ func (p *Pipeline) setupFilters(filtersList []FilterPlugin) (err error) {
 		switch v.Plugin {
 		case "split":
 			filterPlugin, err = filters.NewSplitFilter(v.Options, p.log)
+			break
+		case "substring":
+			filterPlugin, err = filters.NewSubstringFilter(v.Options, p.log)
 			break
 		case "rename":
 			filterPlugin, err = filters.NewRenameFilter(v.Options, p.log)

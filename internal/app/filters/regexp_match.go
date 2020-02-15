@@ -2,31 +2,24 @@ package filters
 
 import (
 	"log"
-	"errors"
-	"github.com/alxark/lonelog/structs"
+	"github.com/alxark/lonelog/internal/structs"
+	"regexp"
 	"strings"
+	"errors"
 )
 
-type SubstrContainsFilter struct {
+type RegexpMatchFilter struct {
 	BasicFilter
 
+	Expression  regexp.Regexp
 	Action      string
 	TargetField string
 	TargetValue string
-	Substring   string
-
-	log log.Logger
+	log         log.Logger
 }
 
-func NewSubstrContainsFilter(options map[string]string, logger log.Logger) (f *SubstrContainsFilter, err error) {
-	f = &SubstrContainsFilter{}
-
-	if _, ok := options["substring"]; !ok {
-		return f, errors.New("no substring specified")
-	}
-
-	f.Substring = options["substring"]
-
+func NewRegexpMatchFilter(options map[string]string, logger log.Logger) (f *RegexpMatchFilter, err error) {
+	f = &RegexpMatchFilter{}
 	if action, ok := options["action"]; ok {
 		if action != "set" {
 			return nil, errors.New("unknown action: " + f.Action)
@@ -43,12 +36,17 @@ func NewSubstrContainsFilter(options map[string]string, logger log.Logger) (f *S
 		return nil, errors.New("no target field")
 	}
 
-	if fieldValue, ok := options["target_value"]; ok && fieldValue != "" {
+	if fieldValue, ok := options["target_value"]; ok && fieldValue != ""{
 		f.TargetValue = fieldValue
 	} else {
 		return nil, errors.New("no target value")
 	}
 
+	if expression, ok := options["expression"]; ok {
+		f.Expression = *regexp.MustCompile(strings.Trim(expression, " \n\t\r"))
+	} else {
+		return nil, errors.New("no expression")
+	}
 	f.log = logger
 
 	return f, nil
@@ -57,7 +55,9 @@ func NewSubstrContainsFilter(options map[string]string, logger log.Logger) (f *S
 /**
  * Split content field by delimiter
  */
-func (f *SubstrContainsFilter) Proceed(input chan structs.Message, output chan structs.Message) (err error) {
+func (f *RegexpMatchFilter) Proceed(input chan structs.Message, output chan structs.Message) (err error) {
+	f.log.Printf("Regexp match filter activated. RegExp: %s, will %s to %s => %s",
+		f.Expression.String(), f.Action, f.TargetField, f.TargetValue)
 
 	for msg := range input {
 		// skip records without target field
@@ -66,7 +66,7 @@ func (f *SubstrContainsFilter) Proceed(input chan structs.Message, output chan s
 			continue
 		}
 
-		if strings.Contains(msg.Payload[f.Field], f.Substring) {
+		if f.Expression.MatchString(msg.Payload[f.Field]) {
 			payload := msg.Payload
 			payload[f.TargetField] = f.TargetValue
 

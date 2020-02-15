@@ -3,7 +3,7 @@ package outputs
 import (
 	"log"
 	"encoding/json"
-	"github.com/alxark/lonelog/structs"
+	"github.com/alxark/lonelog/internal/structs"
 	"strings"
 )
 

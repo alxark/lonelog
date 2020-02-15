@@ -2,7 +2,7 @@ package filters
 
 import (
 	"log"
-	"github.com/alxark/lonelog/structs"
+	"github.com/alxark/lonelog/internal/structs"
 	"github.com/oschwald/geoip2-golang"
 	"net"
 	"strconv"
@@ -55,7 +55,8 @@ func (g *GeoipFilter) Proceed(input chan structs.Message, output chan structs.Me
 				record, err := db.City(ipNet)
 				if err == nil {
 					payload := msg.Payload
-					payload["geoip_country_code"] = record.Country.IsoCode
+
+					payload["geoip_country_code"] = record.Country.IsoCode[0:2]
 					payload["geoip_city_name"] = record.City.Names[g.Lang]
 
 					if len(record.Subdivisions) > 0 {
