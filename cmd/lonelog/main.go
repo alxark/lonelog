@@ -14,10 +14,17 @@ const (
 
 func main() {
 	confPath := flag.String("config", "/etc/lonelog.conf", "path to configuration file")
+	version := flag.Bool("version", false, "check version and exit")
+
 	// debugMode := flag.Bool("debug", false, "enable additional logging")
 	flag.Parse()
 
 	logger := log.New(os.Stdout, "", log.LstdFlags|log.Lshortfile)
+
+	if *version {
+		logger.Print("LoneLog Daemon")
+	}
+
 	logger.Println("Starting new application instance")
 
 	cfg, err := app.ReadConfig(*confPath)
