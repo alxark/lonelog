@@ -6,6 +6,7 @@ import (
 	"github.com/alxark/lonelog/internal/app"
 	"log"
 	"os"
+	"runtime"
 )
 
 const (
@@ -22,7 +23,8 @@ func main() {
 	logger := log.New(os.Stdout, "", log.LstdFlags|log.Lshortfile)
 
 	if *version {
-		logger.Print("LoneLog Daemon")
+		fmt.Print("LoneLog Daemon\nCompiler: " + runtime.Compiler + "\nOS: " + runtime.GOOS + "\n")
+		return
 	}
 
 	logger.Println("Starting new application instance")
