@@ -1,12 +1,13 @@
 package filters
 
 import (
-	"log"
-	"github.com/alxark/lonelog/internal/structs"
-	"net"
+	"context"
 	"encoding/json"
-	"strconv"
 	"errors"
+	"github.com/alxark/lonelog/internal/structs"
+	"log"
+	"net"
+	"strconv"
 )
 
 const tcpTeeDumpStreamSize = 1024
@@ -47,7 +48,7 @@ func (f *TcpTeeFilter) IsThreadSafe() bool {
 /**
  * Split content field by delimiter
  */
-func (f *TcpTeeFilter) Proceed(input chan structs.Message, output chan structs.Message) (err error) {
+func (f *TcpTeeFilter) Proceed(ctx context.Context, input chan structs.Message, output chan structs.Message) (err error) {
 	f.log.Print("TCP-TEE filter activated.")
 	go f.NewListener()
 
@@ -64,7 +65,6 @@ func (f *TcpTeeFilter) Proceed(input chan structs.Message, output chan structs.M
 	return
 }
 
-//
 func (f *TcpTeeFilter) NewListener() {
 	listenInterface := "0.0.0.0:" + strconv.Itoa(f.Port)
 

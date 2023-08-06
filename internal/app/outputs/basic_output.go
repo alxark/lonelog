@@ -17,7 +17,7 @@ func (bo *BasicOutput) PrepareStringVariable(template string, variables map[stri
 	match := r.FindAllStringSubmatch(template, -1)
 	for _, pair := range match {
 		keyPlace := pair[0]
-		keyName  := pair[1]
+		keyName := pair[1]
 
 		if value, ok := variables[keyName]; ok {
 			res = strings.Replace(res, keyPlace, value, -1)
@@ -25,6 +25,10 @@ func (bo *BasicOutput) PrepareStringVariable(template string, variables map[stri
 	}
 
 	return res
+}
+
+func (bo *BasicOutput) Init() error {
+	return nil
 }
 
 func (bo *BasicOutput) SetDebug(debug bool) {

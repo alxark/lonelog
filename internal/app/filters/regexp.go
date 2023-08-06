@@ -1,12 +1,13 @@
 package filters
 
 import (
-	"log"
+	"context"
+	"errors"
 	"github.com/alxark/lonelog/internal/structs"
+	"log"
+	"math"
 	"regexp"
 	"strings"
-	"errors"
-	"math"
 )
 
 type RegexpFilter struct {
@@ -62,7 +63,7 @@ func NewRegexpFilter(options map[string]string, logger log.Logger) (f *RegexpFil
 /**
  * Split content field by delimiter
  */
-func (f *RegexpFilter) Proceed(input chan structs.Message, output chan structs.Message) (err error) {
+func (f *RegexpFilter) Proceed(ctx context.Context, input chan structs.Message, output chan structs.Message) (err error) {
 	f.log.Printf("Regexp filter activated. Total regexp: %d, target field: %s. Service interval: %d",
 		len(f.RegexpList), f.Field, f.ServiceInterval)
 
@@ -78,13 +79,15 @@ func (f *RegexpFilter) Proceed(input chan structs.Message, output chan structs.M
 	j := 0
 	sortPos := 0
 	processed := 0
-	for msg := range input {
+	for ctx.Err() == nil {
+		msg, _ := f.ReadMessage(input)
+
 		j += 1
 		processed += 1
 
 		// skip records without target field
 		if _, ok := msg.Payload[f.Field]; !ok {
-			output <- msg
+			f.WriteMessage(output, msg)
 			continue
 		}
 
@@ -113,7 +116,7 @@ func (f *RegexpFilter) Proceed(input chan structs.Message, output chan structs.M
 			break iterateExpressions
 		}
 
-		output <- msg
+		f.WriteMessage(output, msg)
 
 		if j == f.ServiceInterval {
 			j = 0

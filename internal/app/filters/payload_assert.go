@@ -1,9 +1,10 @@
 package filters
 
 import (
-	"log"
+	"context"
 	"errors"
 	"github.com/alxark/lonelog/internal/structs"
+	"log"
 )
 
 type PayloadAssertFilter struct {
@@ -35,11 +36,13 @@ func NewPayloadAssertFilter(options map[string]string, logger log.Logger) (f *Pa
 /**
  * Main processing loop
  */
-func (f *PayloadAssertFilter) Proceed(input chan structs.Message, output chan structs.Message) (err error) {
+func (f *PayloadAssertFilter) Proceed(ctx context.Context, input chan structs.Message, output chan structs.Message) (err error) {
 	f.log.Printf("Payload fields assert. Total rules: %d", len(f.FieldOptions))
 
 messageLoop:
-	for msg := range input {
+	for ctx.Err() == nil {
+		msg, _ := f.ReadMessage(input)
+
 		for fieldName, status := range f.FieldOptions {
 			switch status {
 			case "required":
@@ -59,7 +62,7 @@ messageLoop:
 			}
 		}
 
-		output <- msg
+		f.WriteMessage(output, msg)
 	}
 
 	f.log.Printf("Channel processing finished. Exiting")

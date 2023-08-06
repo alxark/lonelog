@@ -1,8 +1,9 @@
 package filters
 
 import (
-	"log"
+	"context"
 	"github.com/alxark/lonelog/internal/structs"
+	"log"
 )
 
 type CopyFilter struct {
@@ -25,7 +26,7 @@ func NewCopyFilter(options map[string]string, logger log.Logger) (s *CopyFilter,
 /**
  * Split content field by delimiter
  */
-func (s *CopyFilter) Proceed(input chan structs.Message, output chan structs.Message) (err error) {
+func (s *CopyFilter) Proceed(ctx context.Context, input chan structs.Message, output chan structs.Message) (err error) {
 	s.log.Printf("Set filter started. Total items: %d", len(s.Mapping))
 
 	for msg := range input {

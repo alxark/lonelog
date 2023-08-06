@@ -1,8 +1,9 @@
 package filters
 
 import (
-	"log"
+	"context"
 	"github.com/alxark/lonelog/internal/structs"
+	"log"
 	"regexp"
 	"strings"
 )
@@ -30,7 +31,7 @@ func NewRegexpRemoveFilter(options map[string]string, logger log.Logger) (f *Reg
 /**
  * Split content field by delimiter
  */
-func (f *RegexpRemoveFilter) Proceed(input chan structs.Message, output chan structs.Message) (err error) {
+func (f *RegexpRemoveFilter) Proceed(ctx context.Context, input chan structs.Message, output chan structs.Message) (err error) {
 	f.log.Printf("Regexp remove filter activated. Total regexp: %d, target field: %s", len(f.Expressions), f.Field)
 
 messageLoop:

@@ -1,9 +1,10 @@
 package filters
 
 import (
-	"log"
+	"context"
 	"errors"
 	"github.com/alxark/lonelog/internal/structs"
+	"log"
 	"strings"
 )
 
@@ -57,9 +58,11 @@ func NewSubstrContainsFilter(options map[string]string, logger log.Logger) (f *S
 /**
  * Split content field by delimiter
  */
-func (f *SubstrContainsFilter) Proceed(input chan structs.Message, output chan structs.Message) (err error) {
+func (f *SubstrContainsFilter) Proceed(ctx context.Context, input chan structs.Message, output chan structs.Message) (err error) {
 
-	for msg := range input {
+	for ctx.Err() == nil {
+		msg, _ := f.ReadMessage(input)
+
 		// skip records without target field
 		if _, ok := msg.Payload[f.Field]; !ok {
 			output <- msg
@@ -73,7 +76,7 @@ func (f *SubstrContainsFilter) Proceed(input chan structs.Message, output chan s
 			msg.Payload = payload
 		}
 
-		output <- msg
+		f.WriteMessage(output, msg)
 	}
 
 	f.log.Printf("Channel processing finished. Exiting")

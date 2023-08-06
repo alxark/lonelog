@@ -1,9 +1,10 @@
 package filters
 
 import (
-	"log"
-	"github.com/alxark/lonelog/internal/structs"
+	"context"
 	"errors"
+	"github.com/alxark/lonelog/internal/structs"
+	"log"
 	"time"
 )
 
@@ -12,7 +13,7 @@ type TimeFormatFilter struct {
 
 	SourceFormat string
 	TargetFormat string
-	TargetField string
+	TargetField  string
 	Timezone     *time.Location
 
 	OnError string
@@ -61,11 +62,11 @@ func NewTimeFormatFilter(options map[string]string, logger log.Logger) (t *TimeF
 /**
  * Split content field by delimiter
  */
-func (t *TimeFormatFilter) Proceed(input chan structs.Message, output chan structs.Message) (err error) {
+func (t *TimeFormatFilter) Proceed(ctx context.Context, input chan structs.Message, output chan structs.Message) (err error) {
 	if t.TargetField == "" {
 		t.TargetField = t.Field
 	}
-	
+
 	t.log.Printf("Converting %s (%s) to %s (%s)", t.SourceFormat, t.Field, t.TargetFormat, t.TargetField)
 
 	for msg := range input {
@@ -90,7 +91,7 @@ func (t *TimeFormatFilter) Proceed(input chan structs.Message, output chan struc
 		payload := msg.Payload
 		payload[t.TargetField] = date.Format(t.TargetFormat)
 		if t.Debug {
-			t.log.Printf(t.GetName() + ": Converted time %s (%s) => %s (%s)", msg.Payload[t.Field], t.Field, payload[t.TargetField], t.TargetField)
+			t.log.Printf(t.GetName()+": Converted time %s (%s) => %s (%s)", msg.Payload[t.Field], t.Field, payload[t.TargetField], t.TargetField)
 		}
 
 		msg.Payload = payload

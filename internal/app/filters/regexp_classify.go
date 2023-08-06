@@ -1,13 +1,12 @@
 package filters
 
 import (
-	"log"
-	"github.com/alxark/lonelog/internal/structs"
-	"github.com/hashicorp/hcl"
-	"regexp"
-	"io/ioutil"
+	"context"
 	"errors"
-	"bytes"
+	"github.com/alxark/lonelog/internal/structs"
+	hcl "github.com/hashicorp/hcl/v2/hclsimple"
+	"log"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -22,13 +21,16 @@ import (
  */
 
 type RegexpClassifyConfig struct {
-	Rules map[string]RegexpClassifyRuleRaw `hcl:"rule"`
+	Rules []RegexpClassifyRuleRaw `hcl:"rule,block"`
 }
 
 type RegexpClassifyRuleRaw struct {
-	Expression string
-	Backref    bool
-	Fields     map[string]string
+	Name       string `hcl:",label"`
+	Expression string `hcl:"expression"`
+	Backref    bool   `hcl:"backref,optional"`
+	Fields     struct {
+		Data map[string]string `hcl:",remain"`
+	} `hcl:"fields,block"`
 }
 
 type RegexpClassifyRule struct {
@@ -77,14 +79,8 @@ func NewRegexpClassifyFilter(options map[string]string, logger log.Logger) (f *R
 		return nil, errors.New("no regexp_classify rules available")
 	}
 
-	b, err := ioutil.ReadFile(classesPath)
-
-	if err != nil {
-		return nil, errors.New("failed to read regexp_classify rules " + classesPath)
-	}
-
 	conf := &RegexpClassifyConfig{}
-	if err := hcl.Decode(conf, bytes.NewBuffer(b).String()); err != nil {
+	if err := hcl.DecodeFile(classesPath, nil, conf); err != nil {
 		return nil, err
 	}
 
@@ -95,17 +91,18 @@ func NewRegexpClassifyFilter(options map[string]string, logger log.Logger) (f *R
 	var rules []RegexpClassifyRule
 	var rulesKeys []string
 
-	for k, _ := range conf.Rules {
-		rulesKeys = append(rulesKeys, k)
+	for _, v := range conf.Rules {
+		rulesKeys = append(rulesKeys, v.Name)
 	}
+
 	sort.Strings(rulesKeys)
 
-	for _, key := range rulesKeys {
+	for key, _ := range rulesKeys {
 		rule := RegexpClassifyRule{}
 
 		f.log.Printf("Compiling rule %s", conf.Rules[key].Expression)
 		rule.Expression = *regexp.MustCompile(strings.Trim(conf.Rules[key].Expression, " \n\t\r"))
-		rule.Fields = conf.Rules[key].Fields
+		rule.Fields = conf.Rules[key].Fields.Data
 		rule.Backref = conf.Rules[key].Backref
 		rules = append(rules, rule)
 	}
@@ -119,7 +116,7 @@ func NewRegexpClassifyFilter(options map[string]string, logger log.Logger) (f *R
 /**
  * Split content field by delimiter
  */
-func (f *RegexpClassifyFilter) Proceed(input chan structs.Message, output chan structs.Message) (err error) {
+func (f *RegexpClassifyFilter) Proceed(ctx context.Context, input chan structs.Message, output chan structs.Message) (err error) {
 	f.log.Print("RegexpClassify thread started")
 
 	classifyCache := make(map[string]*RegexpClassifyResult)

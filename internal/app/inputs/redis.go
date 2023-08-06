@@ -1,18 +1,18 @@
 package inputs
 
 import (
-	"github.com/go-redis/redis"
-	"log"
-	"github.com/alxark/lonelog/internal/structs"
-	//"encoding/json"
-	"errors"
-	"strings"
-	"time"
-	"encoding/json"
-	"strconv"
 	"bytes"
 	"compress/gzip"
+	"encoding/json"
+	"github.com/alxark/lonelog/internal/structs"
+	"github.com/go-redis/redis"
+	"log"
+	//"encoding/json"
+	"errors"
 	"io"
+	"strconv"
+	"strings"
+	"time"
 )
 
 const DEFAULTKEY = "logs"
@@ -29,11 +29,11 @@ type RedisInput struct {
 
 	log log.Logger
 
-	Inputs    []Connections
-	Key       string
-	Batch     int
-	FetchMode int
-	Trim      bool
+	Inputs      []Connections
+	Key         string
+	Batch       int
+	FetchMode   int
+	Trim        bool
 	Compression bool
 }
 
@@ -102,9 +102,10 @@ func NewRedisInput(options map[string]string, logger log.Logger) (o *RedisInput,
 func (o *RedisInput) GetRedisConnection() (client *redis.Client, err error) {
 	for {
 		client := redis.NewClient(&redis.Options{
-			Addr:     o.Inputs[0].Addr,
-			Password: "",
-			DB:       0,
+			Addr:        o.Inputs[0].Addr,
+			Password:    "",
+			DB:          0,
+			ReadTimeout: time.Minute,
 		})
 
 		_, err = client.Ping().Result()
@@ -134,7 +135,7 @@ func (o *RedisInput) ProcessRangeTrim(output chan structs.Message, counter chan 
 	client, err := o.GetRedisConnection()
 
 	for {
-		res := client.LRange(o.Key, 0, int64(o.Batch - 1))
+		res := client.LRange(o.Key, 0, int64(o.Batch-1))
 		if err != nil {
 			o.log.Print("failed to connect. got: " + err.Error() + ", going to reconnect")
 			client, err = o.GetRedisConnection()
@@ -171,7 +172,7 @@ func (o *RedisInput) ProcessRangeTrim(output chan structs.Message, counter chan 
 				gz.Multistream(false)
 
 				if err != nil {
-					o.log.Print("failed to parse gzipped data: "  + err.Error())
+					o.log.Print("failed to parse gzipped data: " + err.Error())
 					continue
 				}
 
@@ -198,7 +199,7 @@ func (o *RedisInput) ProcessRangeTrim(output chan structs.Message, counter chan 
 					}
 
 					chunkProcessed += 1
-					output <- msg
+					o.WriteMessage(output, msg)
 				}
 			} else {
 				msg := structs.Message{}
@@ -211,7 +212,7 @@ func (o *RedisInput) ProcessRangeTrim(output chan structs.Message, counter chan 
 
 				chunkProcessed += 1
 
-				output <- msg
+				o.WriteMessage(output, msg)
 			}
 		}
 

@@ -1,6 +1,7 @@
 package filters
 
 import (
+	"context"
 	"errors"
 	"github.com/alxark/lonelog/internal/structs"
 	"log"
@@ -51,7 +52,7 @@ func NewSubstringFilter(options map[string]string, logger log.Logger) (f *Substr
 /**
  * Split content field by delimiter
  */
-func (f *SubstringFilter) Proceed(input chan structs.Message, output chan structs.Message) (err error) {
+func (f *SubstringFilter) Proceed(ctx context.Context, input chan structs.Message, output chan structs.Message) (err error) {
 	end := f.Start + f.Length
 
 	for msg := range input {

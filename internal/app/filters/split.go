@@ -1,11 +1,12 @@
 package filters
 
 import (
-	"log"
+	"context"
 	"errors"
 	"github.com/alxark/lonelog/internal/structs"
-	"strings"
+	"log"
 	"strconv"
+	"strings"
 )
 
 type SplitFilter struct {
@@ -44,10 +45,12 @@ func NewSplitFilter(options map[string]string, logger log.Logger) (f *SplitFilte
 /**
  * Split content field by delimiter
  */
-func (f *SplitFilter) Proceed(input chan structs.Message, output chan structs.Message) (err error) {
+func (f *SplitFilter) Proceed(ctx context.Context, input chan structs.Message, output chan structs.Message) (err error) {
 	f.log.Printf("Split filter activated. Delimiter: %s, Prefix: %s, Field: %s", f.Delimiter, f.Prefix, f.Field)
 
-	for msg := range input {
+	for ctx.Err() == nil {
+		msg, _ := f.ReadMessage(input)
+
 		if fieldData, ok := msg.Payload[f.Field]; ok {
 			splitData := strings.Split(fieldData, f.Delimiter)
 
@@ -60,7 +63,7 @@ func (f *SplitFilter) Proceed(input chan structs.Message, output chan structs.Me
 			msg.Payload = payload
 		}
 
-		output <- msg
+		f.WriteMessage(output, msg)
 	}
 
 	f.log.Printf("Channel processing finished. Exiting")

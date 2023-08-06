@@ -1,15 +1,16 @@
 package app
 
 import (
-	"log"
-	"time"
-	"github.com/alxark/lonelog/internal/app/inputs"
-	"github.com/alxark/lonelog/internal/app/outputs"
-	"github.com/alxark/lonelog/internal/app/filters"
-	"github.com/alxark/lonelog/internal/structs"
+	"context"
 	"errors"
 	"fmt"
+	"github.com/alxark/lonelog/internal/app/filters"
+	"github.com/alxark/lonelog/internal/app/inputs"
+	"github.com/alxark/lonelog/internal/app/outputs"
+	"github.com/alxark/lonelog/internal/structs"
+	"log"
 	"strconv"
+	"time"
 )
 
 const (
@@ -101,18 +102,26 @@ func (p *Pipeline) setupInputs(inputsList []InputPlugin) (err error) {
 	p.log.Printf("Total inputs found: %d", len(inputsList))
 
 	for _, v := range inputsList {
+		p.log.Printf("processing input %s", v.Name)
+
 		var inputPlugin structs.Input
-		switch(v.Plugin) {
+		switch v.Plugin {
 		case "syslog":
-			inputPlugin, err = inputs.NewSyslog(v.Options, p.log)
+			inputPlugin, err = inputs.NewSyslog(v.Options.Data, p.log)
 			break
 		case "redis":
-			inputPlugin, err = inputs.NewRedisInput(v.Options, p.log)
+			inputPlugin, err = inputs.NewRedisInput(v.Options.Data, p.log)
 			break
 		}
 
 		if err != nil {
 			return err
+		}
+
+		inputPlugin.SetName(v.Name)
+
+		if inputPlugin.Init() != nil {
+			return errors.New("failed to initialize input plugin: " + err.Error())
 		}
 
 		if v.Threads > 1 {
@@ -140,49 +149,55 @@ func (p *Pipeline) setupFilters(filtersList []FilterPlugin) (err error) {
 
 		switch v.Plugin {
 		case "split":
-			filterPlugin, err = filters.NewSplitFilter(v.Options, p.log)
+			filterPlugin, err = filters.NewSplitFilter(v.Options.Data, p.log)
 			break
 		case "substring":
-			filterPlugin, err = filters.NewSubstringFilter(v.Options, p.log)
+			filterPlugin, err = filters.NewSubstringFilter(v.Options.Data, p.log)
 			break
 		case "rename":
-			filterPlugin, err = filters.NewRenameFilter(v.Options, p.log)
+			filterPlugin, err = filters.NewRenameFilter(v.Options.Data, p.log)
 			break
 		case "regexp":
-			filterPlugin, err = filters.NewRegexpFilter(v.Options, p.log)
+			filterPlugin, err = filters.NewRegexpFilter(v.Options.Data, p.log)
 			break
 		case "regexp_remove":
-			filterPlugin, err = filters.NewRegexpRemoveFilter(v.Options, p.log)
+			filterPlugin, err = filters.NewRegexpRemoveFilter(v.Options.Data, p.log)
 			break
 		case "regexp_classify":
-			filterPlugin, err = filters.NewRegexpClassifyFilter(v.Options, p.log)
+			filterPlugin, err = filters.NewRegexpClassifyFilter(v.Options.Data, p.log)
 			break
 		case "regexp_match":
-			filterPlugin, err = filters.NewRegexpMatchFilter(v.Options, p.log)
+			filterPlugin, err = filters.NewRegexpMatchFilter(v.Options.Data, p.log)
 			break
 		case "payload_assert":
-			filterPlugin, err = filters.NewPayloadAssertFilter(v.Options, p.log)
+			filterPlugin, err = filters.NewPayloadAssertFilter(v.Options.Data, p.log)
+			break
+		case "payload_equal":
+			filterPlugin, err = filters.NewPayloadEqualFilter(v.Options.Data, p.log)
+			break
+		case "payload_dump":
+			filterPlugin, err = filters.NewPayloadDumpFilter(v.Options.Data, p.log)
 			break
 		case "geoip":
-			filterPlugin, err = filters.NewGeoipFilter(v.Options, p.log)
+			filterPlugin, err = filters.NewGeoipFilter(v.Options.Data, p.log)
 			break
 		case "set":
-			filterPlugin, err = filters.NewSetFilter(v.Options, p.log)
+			filterPlugin, err = filters.NewSetFilter(v.Options.Data, p.log)
 			break
 		case "time_format":
-			filterPlugin, err = filters.NewTimeFormatFilter(v.Options, p.log)
+			filterPlugin, err = filters.NewTimeFormatFilter(v.Options.Data, p.log)
 			break
 		case "substr_contains":
-			filterPlugin, err = filters.NewSubstrContainsFilter(v.Options, p.log)
+			filterPlugin, err = filters.NewSubstrContainsFilter(v.Options.Data, p.log)
 			break
 		case "copy":
-			filterPlugin, err = filters.NewCopyFilter(v.Options, p.log)
+			filterPlugin, err = filters.NewCopyFilter(v.Options.Data, p.log)
 			break
 		case "tcp_tee":
-			filterPlugin, err = filters.NewTcpTeeFilter(v.Options, p.log)
+			filterPlugin, err = filters.NewTcpTeeFilter(v.Options.Data, p.log)
 			break
 		case "web_rpc":
-			filterPlugin, err = filters.NewWebRpcFilter(v.Options, p.log)
+			filterPlugin, err = filters.NewWebRpcFilter(v.Options.Data, p.log)
 			break
 		default:
 			return errors.New(fmt.Sprintf("plugin #%d not found: %s", i, v.Plugin))
@@ -240,19 +255,19 @@ func (p *Pipeline) setupOutput(outputsList []OutputPlugin) (err error) {
 
 		switch v.Plugin {
 		case "stdout":
-			outputPlugin, err = outputs.NewStdoutOutput(v.Options, p.log)
+			outputPlugin, err = outputs.NewStdoutOutput(v.Options.Data, p.log)
 			break
 		case "stat":
-			outputPlugin, err = outputs.NewStatOutput(v.Options, p.log)
+			outputPlugin, err = outputs.NewStatOutput(v.Options.Data, p.log)
 			break
 		case "clickhouse":
-			outputPlugin, err = outputs.NewClickhouseOutput(v.Options, p.log)
+			outputPlugin, err = outputs.NewClickhouseOutput(v.Options.Data, p.log)
 			break
 		case "redis":
-			outputPlugin, err = outputs.NewRedisOutput(v.Options, p.log)
+			outputPlugin, err = outputs.NewRedisOutput(v.Options.Data, p.log)
 			break
 		case "null":
-			outputPlugin, err = outputs.NewNullOutput(v.Options, p.log)
+			outputPlugin, err = outputs.NewNullOutput(v.Options.Data, p.log)
 			break
 		default:
 			return errors.New("failed to initialize output: " + v.Plugin)
@@ -284,6 +299,8 @@ func (p *Pipeline) setupOutput(outputsList []OutputPlugin) (err error) {
  * Proceed pipeline stuff
  */
 func (p *Pipeline) Run() (err error) {
+	ctx := context.Background()
+
 	p.log.Printf("Starting pipeline processing")
 
 	for i, input := range p.Inputs {
@@ -301,21 +318,26 @@ func (p *Pipeline) Run() (err error) {
 		for i, filter := range p.Filters {
 			p.log.Printf("Activating filter #%d", i)
 
+			if err := filter.Init(); err != nil {
+				p.log.Fatal("failed to initialize filter: " + err.Error())
+				return err
+			}
+
 			for thread := 0; thread < p.ThreadsCount[i]; thread += 1 {
 				p.log.Printf("Activating thread %d", thread)
 
 				if i == 0 && len(p.Filters) == 1 {
 					p.log.Print("Single filter mode activated")
-					go filter.Proceed(p.InputStream, p.OutputStream)
+					go filter.Proceed(ctx, p.InputStream, p.OutputStream)
 				} else if i == 0 && len(p.Filters) > 1 {
 					p.log.Printf("First filter to chain pipeline activated")
-					go filter.Proceed(p.InputStream, p.SubChains[i])
+					go filter.Proceed(ctx, p.InputStream, p.SubChains[i])
 				} else if i > 0 && i == len(p.Filters)-1 {
 					p.log.Printf("Last filter in chain, #%d", i)
-					go filter.Proceed(p.SubChains[i-1], p.OutputStream)
+					go filter.Proceed(ctx, p.SubChains[i-1], p.OutputStream)
 				} else if i > 0 && i != len(p.Filters)-1 {
 					p.log.Printf("Middle filter in chain, #%d", i)
-					go filter.Proceed(p.SubChains[i-1], p.SubChains[i])
+					go filter.Proceed(ctx, p.SubChains[i-1], p.SubChains[i])
 				}
 			}
 		}

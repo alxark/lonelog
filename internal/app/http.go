@@ -2,9 +2,10 @@ package app
 
 import (
 	"encoding/json"
-	"net/http"
-	"log"
 	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"log"
+	"net/http"
 )
 
 type HttpService struct {
@@ -20,14 +21,18 @@ func NewHttp(logger log.Logger, pipelines []*Pipeline) (hs *HttpService, err err
 	return hs, err
 }
 
-//Start serve & listen port
+// Start serve & listen port
 func (hs HttpService) Serve(listen string) {
 	//hs.Info("Listen on:  " + hs.listen)
 	router := mux.NewRouter()
 	//router.HandleFunc("/", indexPageg
 	router.HandleFunc("/status", hs.getStatus).Methods("GET") //curl -X GET "http://localhost:10200/regions"
+	router.Handle("/metrics", promhttp.Handler()).Methods("GET")
 
-	log.Fatal(http.ListenAndServe(listen, router))
+	err := http.ListenAndServe(listen, router)
+	if err != nil {
+		hs.logger.Fatal("failed to start HTTP server: ", err.Error())
+	}
 }
 func indexPage(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode("Privet")

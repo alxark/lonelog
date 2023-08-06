@@ -1,9 +1,10 @@
 package filters
 
 import (
-	"log"
+	"context"
 	"github.com/alxark/lonelog/internal/structs"
 	"github.com/oschwald/geoip2-golang"
+	"log"
 	"net"
 	"strconv"
 )
@@ -12,7 +13,7 @@ type GeoipFilter struct {
 	BasicFilter
 
 	Database string
-	Lang string
+	Lang     string
 
 	log log.Logger
 }
@@ -38,7 +39,7 @@ func NewGeoipFilter(options map[string]string, logger log.Logger) (g *GeoipFilte
 /**
  * Split content field by delimiter
  */
-func (g *GeoipFilter) Proceed(input chan structs.Message, output chan structs.Message) (err error) {
+func (g *GeoipFilter) Proceed(ctx context.Context, input chan structs.Message, output chan structs.Message) (err error) {
 	g.log.Printf("GeoIP filter, database from %s, check field: %s", g.Database, g.Field)
 
 	db, err := geoip2.Open(g.Database)

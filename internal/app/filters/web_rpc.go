@@ -1,19 +1,20 @@
 package filters
 
 import (
-	"log"
+	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"github.com/alxark/lonelog/internal/structs"
-	"strings"
-	"strconv"
-	"sync"
-	"net/http"
 	"io/ioutil"
+	"log"
+	"net/http"
 	"net/url"
-	"crypto/sha256"
-	"encoding/json"
+	"strconv"
+	"strings"
+	"sync"
 	"time"
-	"encoding/base64"
 )
 
 const OnFailRetry = 1
@@ -83,7 +84,7 @@ func NewWebRpcFilter(options map[string]string, logger log.Logger) (f *WebRpcFil
 /**
  * Split content field by delimiter
  */
-func (f *WebRpcFilter) Proceed(input chan structs.Message, output chan structs.Message) (err error) {
+func (f *WebRpcFilter) Proceed(ctx context.Context, input chan structs.Message, output chan structs.Message) (err error) {
 	f.Cache = make(map[string]RpcReply)
 
 	i := 0
@@ -140,7 +141,7 @@ func (f *WebRpcFilter) Proceed(input chan structs.Message, output chan structs.M
 
 					i := 0
 					for {
-						i ++
+						i++
 						result, err = f.Call(msg.Payload)
 						if err != nil {
 							time.Sleep(time.Duration(i) * time.Second)

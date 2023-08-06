@@ -1,8 +1,9 @@
 package filters
 
 import (
-	"log"
+	"context"
 	"github.com/alxark/lonelog/internal/structs"
+	"log"
 )
 
 type SetFilter struct {
@@ -25,7 +26,7 @@ func NewSetFilter(options map[string]string, logger log.Logger) (s *SetFilter, e
 /**
  * Split content field by delimiter
  */
-func (s *SetFilter) Proceed(input chan structs.Message, output chan structs.Message) (err error) {
+func (s *SetFilter) Proceed(ctx context.Context, input chan structs.Message, output chan structs.Message) (err error) {
 	s.log.Printf("Set filter started. Total items: %d", len(s.Updates))
 
 	for msg := range input {

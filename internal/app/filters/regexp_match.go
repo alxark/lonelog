@@ -1,11 +1,12 @@
 package filters
 
 import (
-	"log"
+	"context"
+	"errors"
 	"github.com/alxark/lonelog/internal/structs"
+	"log"
 	"regexp"
 	"strings"
-	"errors"
 )
 
 type RegexpMatchFilter struct {
@@ -36,7 +37,7 @@ func NewRegexpMatchFilter(options map[string]string, logger log.Logger) (f *Rege
 		return nil, errors.New("no target field")
 	}
 
-	if fieldValue, ok := options["target_value"]; ok && fieldValue != ""{
+	if fieldValue, ok := options["target_value"]; ok && fieldValue != "" {
 		f.TargetValue = fieldValue
 	} else {
 		return nil, errors.New("no target value")
@@ -55,7 +56,7 @@ func NewRegexpMatchFilter(options map[string]string, logger log.Logger) (f *Rege
 /**
  * Split content field by delimiter
  */
-func (f *RegexpMatchFilter) Proceed(input chan structs.Message, output chan structs.Message) (err error) {
+func (f *RegexpMatchFilter) Proceed(ctx context.Context, input chan structs.Message, output chan structs.Message) (err error) {
 	f.log.Printf("Regexp match filter activated. RegExp: %s, will %s to %s => %s",
 		f.Expression.String(), f.Action, f.TargetField, f.TargetValue)
 
