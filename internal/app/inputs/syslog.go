@@ -1,17 +1,18 @@
 package inputs
 
 import (
+	"errors"
+	"fmt"
+	"github.com/alxark/lonelog/internal/structs"
 	"gopkg.in/mcuadros/go-syslog.v2"
 	"log"
 	"strconv"
-	"errors"
-	"github.com/alxark/lonelog/internal/structs"
-	"fmt"
 	"time"
 )
 
 type Syslog struct {
-	structs.Input
+	BasicInput
+
 	log       log.Logger
 	Ip        string
 	QueueSize int
