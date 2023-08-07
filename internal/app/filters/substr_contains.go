@@ -65,7 +65,7 @@ func (f *SubstrContainsFilter) Proceed(ctx context.Context, input chan structs.M
 
 		// skip records without target field
 		if _, ok := msg.Payload[f.Field]; !ok {
-			output <- msg
+			_ = f.WriteMessage(output, msg)
 			continue
 		}
 
@@ -76,7 +76,7 @@ func (f *SubstrContainsFilter) Proceed(ctx context.Context, input chan structs.M
 			msg.Payload = payload
 		}
 
-		f.WriteMessage(output, msg)
+		_ = f.WriteMessage(output, msg)
 	}
 
 	f.log.Printf("Channel processing finished. Exiting")

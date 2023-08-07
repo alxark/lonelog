@@ -8,4 +8,10 @@ type Output interface {
 
 	// Init - initialize filter, good place to put metrics initialization
 	Init() error
+
+	// SetName - set output name
+	SetName(string)
+
+	// GetName - get output name
+	GetName() string
 }

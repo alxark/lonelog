@@ -36,9 +36,7 @@ func NewGeoipFilter(options map[string]string, logger log.Logger) (g *GeoipFilte
 	return g, nil
 }
 
-/**
- * Split content field by delimiter
- */
+// Proceed - handle data
 func (g *GeoipFilter) Proceed(ctx context.Context, input chan structs.Message, output chan structs.Message) (err error) {
 	g.log.Printf("GeoIP filter, database from %s, check field: %s", g.Database, g.Field)
 
@@ -48,7 +46,9 @@ func (g *GeoipFilter) Proceed(ctx context.Context, input chan structs.Message, o
 	}
 	defer db.Close()
 
-	for msg := range input {
+	for ctx.Err() == nil {
+		msg, _ := g.ReadMessage(input)
+
 		if ip, ok := msg.Payload[g.Field]; ok {
 			ipNet := net.ParseIP(ip)
 
@@ -77,7 +77,7 @@ func (g *GeoipFilter) Proceed(ctx context.Context, input chan structs.Message, o
 			}
 		}
 
-		output <- msg
+		_ = g.WriteMessage(output, msg)
 	}
 
 	g.log.Printf("Channel processing finished. Exiting")

@@ -59,9 +59,7 @@ func NewTimeFormatFilter(options map[string]string, logger log.Logger) (t *TimeF
 	return t, nil
 }
 
-/**
- * Split content field by delimiter
- */
+// Proceed - split content field by delimiter
 func (t *TimeFormatFilter) Proceed(ctx context.Context, input chan structs.Message, output chan structs.Message) (err error) {
 	if t.TargetField == "" {
 		t.TargetField = t.Field
@@ -69,9 +67,11 @@ func (t *TimeFormatFilter) Proceed(ctx context.Context, input chan structs.Messa
 
 	t.log.Printf("Converting %s (%s) to %s (%s)", t.SourceFormat, t.Field, t.TargetFormat, t.TargetField)
 
-	for msg := range input {
+	for ctx.Err() == nil {
+		msg, _ := t.ReadMessage(input)
+
 		if _, ok := msg.Payload[t.Field]; !ok {
-			output <- msg
+			_ = t.WriteMessage(output, msg)
 			continue
 		}
 
@@ -96,7 +96,7 @@ func (t *TimeFormatFilter) Proceed(ctx context.Context, input chan structs.Messa
 
 		msg.Payload = payload
 
-		output <- msg
+		_ = t.WriteMessage(output, msg)
 	}
 
 	t.log.Printf("Channel processing finished. Exiting")

@@ -63,7 +63,7 @@ func (f *SplitFilter) Proceed(ctx context.Context, input chan structs.Message, o
 			msg.Payload = payload
 		}
 
-		f.WriteMessage(output, msg)
+		_ = f.WriteMessage(output, msg)
 	}
 
 	f.log.Printf("Channel processing finished. Exiting")

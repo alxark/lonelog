@@ -53,17 +53,17 @@ func NewRegexpMatchFilter(options map[string]string, logger log.Logger) (f *Rege
 	return f, nil
 }
 
-/**
- * Split content field by delimiter
- */
+// Proceed - split content field by delimiter
 func (f *RegexpMatchFilter) Proceed(ctx context.Context, input chan structs.Message, output chan structs.Message) (err error) {
 	f.log.Printf("Regexp match filter activated. RegExp: %s, will %s to %s => %s",
 		f.Expression.String(), f.Action, f.TargetField, f.TargetValue)
 
-	for msg := range input {
+	for ctx.Err() == nil {
+		msg, _ := f.ReadMessage(input)
+
 		// skip records without target field
 		if _, ok := msg.Payload[f.Field]; !ok {
-			output <- msg
+			_ = f.WriteMessage(output, msg)
 			continue
 		}
 
@@ -74,7 +74,7 @@ func (f *RegexpMatchFilter) Proceed(ctx context.Context, input chan structs.Mess
 			msg.Payload = payload
 		}
 
-		output <- msg
+		_ = f.WriteMessage(output, msg)
 	}
 
 	f.log.Printf("Channel processing finished. Exiting")

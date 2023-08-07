@@ -55,10 +55,12 @@ func NewSubstringFilter(options map[string]string, logger log.Logger) (f *Substr
 func (f *SubstringFilter) Proceed(ctx context.Context, input chan structs.Message, output chan structs.Message) (err error) {
 	end := f.Start + f.Length
 
-	for msg := range input {
+	for ctx.Err() == nil {
+		msg, _ := f.ReadMessage(input)
+
 		// skip records without target field
 		if _, ok := msg.Payload[f.Field]; !ok {
-			output <- msg
+			_ = f.WriteMessage(output, msg)
 			continue
 		}
 
@@ -66,7 +68,7 @@ func (f *SubstringFilter) Proceed(ctx context.Context, input chan structs.Messag
 		payload[f.Field] = payload[f.Field][f.Start:end]
 		msg.Payload = payload
 
-		output <- msg
+		_ = f.WriteMessage(output, msg)
 	}
 
 	f.log.Printf("Channel processing finished. Exiting")

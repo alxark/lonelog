@@ -33,9 +33,6 @@ func NewPayloadAssertFilter(options map[string]string, logger log.Logger) (f *Pa
 	return f, nil
 }
 
-/**
- * Main processing loop
- */
 func (f *PayloadAssertFilter) Proceed(ctx context.Context, input chan structs.Message, output chan structs.Message) (err error) {
 	f.log.Printf("Payload fields assert. Total rules: %d", len(f.FieldOptions))
 
@@ -62,7 +59,7 @@ messageLoop:
 			}
 		}
 
-		f.WriteMessage(output, msg)
+		_ = f.WriteMessage(output, msg)
 	}
 
 	f.log.Printf("Channel processing finished. Exiting")

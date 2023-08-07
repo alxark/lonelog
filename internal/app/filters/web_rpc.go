@@ -81,16 +81,16 @@ func NewWebRpcFilter(options map[string]string, logger log.Logger) (f *WebRpcFil
 	return f, nil
 }
 
-/**
- * Split content field by delimiter
- */
+// Proceed - split content field by delimiter
 func (f *WebRpcFilter) Proceed(ctx context.Context, input chan structs.Message, output chan structs.Message) (err error) {
 	f.Cache = make(map[string]RpcReply)
 
 	i := 0
-	for msg := range input {
+	for ctx.Err() == nil {
+		msg, _ := f.ReadMessage(input)
+
 		if i == f.ServiceInterval {
-			f.log.Printf("Doing service works. Total cache size: %d", len(f.Cache))
+			f.log.Printf("doing service works. Total cache size: %d", len(f.Cache))
 			i = 0
 
 			f.Mutex.Lock()
@@ -114,7 +114,7 @@ func (f *WebRpcFilter) Proceed(ctx context.Context, input chan structs.Message, 
 		msgHash, err := f.HashKey(msg.Payload)
 
 		if err != nil {
-			output <- msg
+			_ = f.WriteMessage(output, msg)
 			f.log.Printf("[ERROR] Failed to generate hash: %s", err.Error())
 			continue
 		}
@@ -133,7 +133,7 @@ func (f *WebRpcFilter) Proceed(ctx context.Context, input chan structs.Message, 
 			if err != nil {
 				if f.OnFail == OnFailSkip {
 					f.log.Printf("failed for load information from RPC: %s", err.Error())
-					output <- msg
+					_ = f.WriteMessage(output, msg)
 					continue
 					// oh shit, we need to retry and wait for result
 				} else if f.OnFail == OnFailRetry {
@@ -171,7 +171,8 @@ func (f *WebRpcFilter) Proceed(ctx context.Context, input chan structs.Message, 
 			payload[key] = value
 			msg.Payload = payload
 		}
-		output <- msg
+
+		_ = f.WriteMessage(output, msg)
 	}
 
 	return

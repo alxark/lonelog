@@ -84,7 +84,7 @@ func NewRegexpClassifyFilter(options map[string]string, logger log.Logger) (f *R
 		return nil, err
 	}
 
-	logger.Printf("Loaded classification rules. Total rules: %d", len(conf.Rules))
+	logger.Printf("loaded classification rules. Total rules: %d", len(conf.Rules))
 
 	f.log = logger
 
@@ -122,11 +122,13 @@ func (f *RegexpClassifyFilter) Proceed(ctx context.Context, input chan structs.M
 	classifyCache := make(map[string]*RegexpClassifyResult)
 
 	i := 0
-	for msg := range input {
+	for ctx.Err() == nil {
+		msg, _ := f.ReadMessage(input)
+
 		i += 1
 
 		if _, ok := msg.Payload[f.Field]; !ok {
-			output <- msg
+			_ = f.WriteMessage(output, msg)
 			continue
 		}
 
@@ -149,7 +151,7 @@ func (f *RegexpClassifyFilter) Proceed(ctx context.Context, input chan structs.M
 
 			classifyCache[fieldValue].UpdateActivation()
 
-			output <- msg
+			_ = f.WriteMessage(output, msg)
 			continue
 		}
 
@@ -182,7 +184,7 @@ func (f *RegexpClassifyFilter) Proceed(ctx context.Context, input chan structs.M
 			msg.Payload = payload
 		}
 
-		output <- msg
+		_ = f.WriteMessage(output, msg)
 
 		if i >= f.ServiceInterval {
 			i = 0
