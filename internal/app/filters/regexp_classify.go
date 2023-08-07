@@ -5,12 +5,21 @@ import (
 	"errors"
 	"github.com/alxark/lonelog/internal/structs"
 	hcl "github.com/hashicorp/hcl/v2/hclsimple"
+	"github.com/prometheus/client_golang/prometheus"
 	"log"
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
+
+var regexpClassifyOnce = sync.Once{}
+var regexpClassifyMetrics = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+	Namespace: "ll",
+	Subsystem: "filters",
+	Name:      "regexp_classify_matches",
+}, []string{"filter", "rule"})
 
 /**
  * How this module is working:
@@ -34,6 +43,7 @@ type RegexpClassifyRuleRaw struct {
 }
 
 type RegexpClassifyRule struct {
+	Name       string
 	Expression regexp.Regexp
 	Backref    bool
 	Fields     map[string]string
@@ -102,15 +112,24 @@ func NewRegexpClassifyFilter(options map[string]string, logger log.Logger) (f *R
 
 		f.log.Printf("Compiling rule %s", conf.Rules[key].Expression)
 		rule.Expression = *regexp.MustCompile(strings.Trim(conf.Rules[key].Expression, " \n\t\r"))
+		rule.Name = conf.Rules[key].Name
 		rule.Fields = conf.Rules[key].Fields.Data
 		rule.Backref = conf.Rules[key].Backref
 		rules = append(rules, rule)
 	}
 
 	f.Rules = rules
-	f.log.Printf("Regexp classify initialized. Total rules: %d", len(f.Rules))
+	f.log.Printf("regexp classify initialized. Total rules: %d", len(f.Rules))
 
 	return f, nil
+}
+
+func (f *RegexpClassifyFilter) Init() error {
+	regexpClassifyOnce.Do(func() {
+		prometheus.MustRegister(regexpClassifyMetrics)
+	})
+
+	return f.BasicFilter.Init()
 }
 
 /**
@@ -169,6 +188,8 @@ func (f *RegexpClassifyFilter) Proceed(ctx context.Context, input chan structs.M
 				for matchField, matchValue := range v.Fields {
 					fields[matchField] = matchValue
 				}
+
+				regexpClassifyMetrics.WithLabelValues(f.GetName(), v.Name).Inc()
 			}
 		}
 
@@ -190,7 +211,7 @@ func (f *RegexpClassifyFilter) Proceed(ctx context.Context, input chan structs.M
 			i = 0
 
 			if f.Debug {
-				f.log.Printf("Running service procedures, total cache size: %d", len(classifyCache))
+				f.log.Printf("running service procedures, total cache size: %d", len(classifyCache))
 			}
 
 			var toRemove []string
@@ -204,7 +225,7 @@ func (f *RegexpClassifyFilter) Proceed(ctx context.Context, input chan structs.M
 			}
 
 			if f.Debug {
-				f.log.Printf("Total items for removal: %d", len(toRemove))
+				f.log.Printf("total items for removal: %d", len(toRemove))
 			}
 
 			for _, keyName := range toRemove {

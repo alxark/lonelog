@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"github.com/alxark/lonelog/internal/structs"
+	"github.com/prometheus/client_golang/prometheus"
 	"log"
 	"math"
 	"regexp"
 	"strings"
+	"sync"
 )
 
 type RegexpFilter struct {
@@ -17,6 +19,13 @@ type RegexpFilter struct {
 
 	log log.Logger
 }
+
+var regexpOnce = sync.Once{}
+var regexpMetrics = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+	Namespace: "ll",
+	Subsystem: "filters",
+	Name:      "regexp_matches",
+}, []string{"filter", "rule"})
 
 // this coef is used to reduce number of matches so in fact we will
 const REDUCECOEF = 0.99
@@ -60,6 +69,14 @@ func NewRegexpFilter(options map[string]string, logger log.Logger) (f *RegexpFil
 	return f, nil
 }
 
+func (f *RegexpFilter) Init() error {
+	regexpOnce.Do(func() {
+		prometheus.MustRegister(regexpMetrics)
+	})
+
+	return f.BasicFilter.Init()
+}
+
 /**
  * Split content field by delimiter
  */
@@ -87,11 +104,10 @@ func (f *RegexpFilter) Proceed(ctx context.Context, input chan structs.Message, 
 
 		// skip records without target field
 		if _, ok := msg.Payload[f.Field]; !ok {
-			f.WriteMessage(output, msg)
+			_ = f.WriteMessage(output, msg)
 			continue
 		}
 
-		// f.log.Print(msg.Payload[f.Field])
 	iterateExpressions:
 		for i, e := range expList {
 			match := e.Expression.FindStringSubmatch(msg.Payload[f.Field])
@@ -116,7 +132,7 @@ func (f *RegexpFilter) Proceed(ctx context.Context, input chan structs.Message, 
 			break iterateExpressions
 		}
 
-		f.WriteMessage(output, msg)
+		_ = f.WriteMessage(output, msg)
 
 		if j == f.ServiceInterval {
 			j = 0
@@ -129,6 +145,8 @@ func (f *RegexpFilter) Proceed(ctx context.Context, input chan structs.Message, 
 					f.log.Printf("OK: %d, FAIL: %d => %s", e.Matches, e.Fails, e.Expression.String())
 				}
 				expList[i].Reduce()
+
+				regexpMetrics.WithLabelValues(f.Name, e.Name).Set(float64(e.Matches))
 			}
 
 			if expList[sortPos].Matches < expList[sortPos+1].Matches {
