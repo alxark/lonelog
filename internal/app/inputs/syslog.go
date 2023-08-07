@@ -93,7 +93,7 @@ func (s *Syslog) AcceptTo(output chan structs.Message, counter chan int) (err er
 			i = 0
 		}
 
-		output <- msg
+		_ = s.WriteMessage(output, msg)
 	}
 
 	return
